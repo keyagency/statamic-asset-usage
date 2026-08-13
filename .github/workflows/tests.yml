@@ -1,0 +1,58 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4', '8.5']
+        dependencies: [highest]
+        include:
+          - php: '8.2'
+            dependencies: lowest
+    name: PHP ${{ matrix.php }} (${{ matrix.dependencies }})
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v4
+        with:
+          dependency-versions: ${{ matrix.dependencies }}
+
+      - name: Run tests
+        run: vendor/bin/phpunit --testdox --colors=always --display-warnings --display-deprecations
+
+  # Code style runs once, against the current Pint. Pinning it to the oldest
+  # resolvable version would check against renamed, differently-configured
+  # rules that today's Pint cannot satisfy at the same time.
+  pint:
+    runs-on: ubuntu-latest
+    name: Code style
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v4
+        with:
+          dependency-versions: highest
+
+      - name: Check code style
+        run: vendor/bin/pint --test -v

@@ -1,0 +1,50 @@
+{
+    "name": "keyagency/statamic-asset-usage",
+    "description": "See where every asset is used across entries, globals, taxonomy terms, navs, users and form submissions, and find the ones that aren't used at all",
+    "type": "statamic-addon",
+    "homepage": "https://github.com/keyagency/statamic-asset-usage",
+    "require": {
+        "php": "^8.2",
+        "pixelfear/composer-dist-plugin": "^0.1.6",
+        "statamic/cms": "^6.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "KeyAgency\\AssetUsage\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "KeyAgency\\AssetUsage\\Tests\\": "tests/"
+        }
+    },
+    "require-dev": {
+        "laravel/pint": "^1.13",
+        "orchestra/testbench": "^10.8"
+    },
+    "config": {
+        "allow-plugins": {
+            "pixelfear/composer-dist-plugin": true
+        }
+    },
+    "extra": {
+        "download-dist": {
+            "url": "https://github.com/keyagency/statamic-asset-usage/releases/download/{$version}/dist.tar.gz",
+            "path": "resources/dist"
+        },
+        "statamic": {
+            "slug": "asset-usage",
+            "name": "Asset Usage",
+            "description": "See where every asset is used across all your content, and find the ones that aren't used at all",
+            "developer": "Key Agency",
+            "developer_url": "https://github.com/keyagency"
+        },
+        "laravel": {
+            "providers": [
+                "KeyAgency\\AssetUsage\\ServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
