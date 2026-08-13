@@ -19,6 +19,9 @@ return [
     'no_results' => 'No assets match these filters.',
     'no_containers' => 'No asset containers are enabled for this addon.',
 
+    'disclaimer' => 'Deleting assets is permanent and happens at your own risk. Keep a backup of your files — the author accepts no liability for lost files or any other damage arising from the use of this addon.',
+    'made_by' => 'Made by',
+
     'permissions' => [
         'group' => 'Asset Usage',
         'view' => 'View asset usage',

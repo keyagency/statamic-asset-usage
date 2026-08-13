@@ -131,6 +131,16 @@ export default {
             return !this.allDeletableSelected && this.deletableAssets.some(asset => this.isSelected(asset.id))
         },
 
+        /**
+         * The button stays visible while nothing is selected, so it only carries
+         * a count once there is one — "(0)" reads as a broken counter.
+         */
+        deleteSelectedText() {
+            const label = __('asset-usage::messages.delete.selected')
+
+            return this.selected.length ? `${label} (${this.selected.length})` : label
+        },
+
         busy() {
             return this.loading || this.rebuilding || this.deleting
         },
@@ -447,9 +457,8 @@ export default {
             <Button
                 v-if="canDelete"
                 variant="danger"
-                :class="{ invisible: !selected.length }"
                 :disabled="busy || !selected.length"
-                :text="`${__('asset-usage::messages.delete.selected')} (${selected.length})`"
+                :text="deleteSelectedText"
                 @click="confirmDelete(selectedAssets())"
             />
 
@@ -589,6 +598,33 @@ export default {
             :show-per-page-selector="false"
             @page-selected="goToPage"
         />
+
+        <div class="mt-6 border-t border-gray-200 pt-4 text-center dark:border-gray-700">
+            <Text
+                as="p"
+                class="mx-auto max-w-2xl"
+                size="sm"
+                variant="subtle"
+                :text="__('asset-usage::messages.disclaimer')"
+            />
+
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ __('asset-usage::messages.made_by') }}
+                <a
+                    class="text-blue-600 hover:underline dark:text-blue-400"
+                    href="https://statamic.com/creators/key-agency"
+                    target="_blank"
+                    rel="noopener"
+                >Key Agency</a>
+                <span class="mx-1" aria-hidden="true">·</span>
+                <a
+                    class="text-blue-600 hover:underline dark:text-blue-400"
+                    href="https://github.com/keyagency"
+                    target="_blank"
+                    rel="noopener"
+                >GitHub</a>
+            </p>
+        </div>
         </template>
 
         <ConfirmationModal

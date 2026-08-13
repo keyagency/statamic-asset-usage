@@ -19,6 +19,9 @@ return [
     'no_results' => 'Geen assets voor deze filters.',
     'no_containers' => 'Er zijn geen asset containers ingeschakeld voor deze addon.',
 
+    'disclaimer' => 'Assets verwijderen is definitief en gebeurt op eigen risico. Zorg voor een back-up van je bestanden — de maker aanvaardt geen aansprakelijkheid voor verloren bestanden of andere schade door het gebruik van deze addon.',
+    'made_by' => 'Gemaakt door',
+
     'permissions' => [
         'group' => 'Assetgebruik',
         'view' => 'Assetgebruik bekijken',

@@ -20,6 +20,7 @@ use Statamic\Events\GlobalVariablesSaved;
 use Statamic\Events\LocalizedTermSaved;
 use Statamic\Events\NavTreeDeleted;
 use Statamic\Events\NavTreeSaved;
+use Statamic\Events\RevisionDeleted;
 use Statamic\Events\SubmissionDeleted;
 use Statamic\Events\SubmissionSaved;
 use Statamic\Events\Subscriber;
@@ -41,6 +42,7 @@ class UpdateUsageIndex extends Subscriber implements ShouldQueue
     protected $listeners = [
         EntrySaved::class => 'handleEntrySaved',
         EntryDeleted::class => 'handleEntryDeleted',
+        RevisionDeleted::class => 'handleRevisionDeleted',
         TermSaved::class => 'handleTermSaved',
         LocalizedTermSaved::class => 'handleLocalizedTermSaved',
         TermDeleted::class => 'handleTermDeleted',
@@ -84,6 +86,27 @@ class UpdateUsageIndex extends Subscriber implements ShouldQueue
             Usage::makeItemKey('entry', $event->entry->id(), $event->entry->locale()),
             Usage::makeItemKey('entry_draft', $event->entry->id(), $event->entry->locale()),
         );
+    }
+
+    /**
+     * Publishing or discarding a draft deletes the working copy, but Statamic
+     * saves the entry first, so `handleEntrySaved` still sees a draft that is
+     * on its way out. The revision's own deletion is the reliable moment.
+     */
+    public function handleRevisionDeleted(RevisionDeleted $event): void
+    {
+        if (! $event->revision->isWorkingCopy()) {
+            return;
+        }
+
+        // Entry revision keys are `collections/{collection}/{site}/{id}`.
+        $parts = explode('/', $event->revision->key());
+
+        if (count($parts) !== 4 || $parts[0] !== 'collections') {
+            return;
+        }
+
+        $this->forgetKeys(Usage::makeItemKey('entry_draft', $parts[3], $parts[2]));
     }
 
     public function handleTermSaved(TermSaved $event): void

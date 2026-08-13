@@ -82,6 +82,76 @@ class IncrementalUpdateTest extends TestCase
         $this->assertFalse($this->index()->isUsed('assets::img/photo.jpg'));
     }
 
+    /**
+     * Statamic saves the entry before it deletes the working copy, so the
+     * EntrySaved handler still sees the draft. Only the revision's deletion
+     * tells us it's gone.
+     */
+    #[Test]
+    public function publishing_a_draft_drops_the_draft_usage()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $entry = $this->draftEntry(['hero' => 'img/photo.jpg']);
+        $this->build();
+
+        $this->assertSame(['entry_draft'], $this->typesFor('assets::img/photo.jpg'));
+
+        $entry->fresh()->publishWorkingCopy();
+
+        $this->assertSame(['entry'], $this->typesFor('assets::img/photo.jpg'));
+    }
+
+    #[Test]
+    public function discarding_a_draft_drops_the_draft_usage()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $entry = $this->draftEntry(['hero' => 'img/photo.jpg']);
+        $this->build();
+
+        $this->assertSame(['entry_draft'], $this->typesFor('assets::img/photo.jpg'));
+
+        $entry->fresh()->deleteWorkingCopy();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/photo.jpg'));
+    }
+
+    #[Test]
+    public function deleting_an_ordinary_revision_leaves_the_draft_usage_alone()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $entry = $this->draftEntry(['hero' => 'img/photo.jpg']);
+        $this->build();
+
+        tap($entry->fresh()->makeRevision()->message('a snapshot'))->save()->delete();
+
+        $this->assertSame(['entry_draft'], $this->typesFor('assets::img/photo.jpg'));
+    }
+
+    /** An unpublished entry whose working copy holds the given data. */
+    private function draftEntry(array $draftData)
+    {
+        config(['statamic.revisions.enabled' => true]);
+
+        $entry = $this->makeEntry('home', ['title' => 'Home']);
+
+        Collection::findByHandle('pages')->revisionsEnabled(true)->save();
+
+        $entry = $entry->fresh();
+        $entry->published(false)->save();
+
+        $working = $entry->makeWorkingCopy();
+        $working->attribute('data', array_merge($working->attribute('data'), $draftData));
+        $working->save();
+
+        return $entry;
+    }
+
+    /** @return string[] */
+    private function typesFor(string $assetId): array
+    {
+        return collect($this->index()->for($assetId))->map(fn ($usage) => $usage->type)->all();
+    }
+
     #[Test]
     public function one_entry_losing_a_reference_leaves_another_entrys_usage_alone()
     {
