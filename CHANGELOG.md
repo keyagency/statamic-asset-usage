@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.0.1 (2026-08-13)
+
+### What's fixed
+- Publishing the config wrote the file to `config/asset-usage.php` as well as `config/statamic/asset-usage.php`. Only the latter is read; the stray copy is safe to delete.
+
 ## 1.0.0 (2026-08-13)
 
 First release.

@@ -21,6 +21,9 @@ class ServiceProvider extends AddonServiceProvider
 
     public const PERMISSION_DELETE = 'delete unused assets';
 
+    // Statamic would publish a second copy to config/asset-usage.php; we merge and publish our own below.
+    protected $config = false;
+
     protected $vite = [
         'input' => [
             'resources/js/cp.js',
