@@ -2,6 +2,7 @@
     "name": "keyagency/statamic-asset-usage",
     "description": "See where every asset is used across entries, globals, taxonomy terms, navs, users and form submissions, and find the ones that aren't used at all",
     "type": "statamic-addon",
+    "license": "proprietary",
     "homepage": "https://github.com/keyagency/statamic-asset-usage",
     "require": {
         "php": "^8.2",
