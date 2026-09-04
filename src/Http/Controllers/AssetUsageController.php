@@ -206,6 +206,14 @@ class AssetUsageController extends CpController
      */
     private function unusedIds(Request $request, Unused $unused, UsageIndex $index): array
     {
+        /*
+         * Without usage data every asset looks unreferenced, which would put a
+         * count on the "delete all unused" button covering the whole library.
+         */
+        if (! $unused->hasUsageData()) {
+            return [];
+        }
+
         $ids = $this->filter($request, $unused->containers(), $index, usage: 'unused');
 
         return array_values(array_filter(
@@ -383,7 +391,10 @@ class AssetUsageController extends CpController
         return [
             'exists' => $store->exists(),
             'stale' => $store->isStale(),
+            'aged' => $store->isAged(),
             'building' => $store->isBuilding(),
+            /** The reminder reads differently depending on whether anything is keeping the index current. */
+            'auto_update' => Settings::autoUpdates(),
             'built_at' => $meta['built_at'],
             /*
              * Spelled out and localised, because isoFormat() gives translated month

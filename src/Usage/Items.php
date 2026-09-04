@@ -228,7 +228,13 @@ final class Items
             type: 'user',
             key: $user->id(),
             site: null,
-            title: $user->name() ?: $user->email(),
+            /*
+             * Down to the id if it has to be. A user row with neither a name nor
+             * an email is not something the CP can produce, but the eloquent
+             * driver and a programmatic save can, and a null here would take
+             * down the whole build and every content save with it.
+             */
+            title: $user->name() ?: $user->email() ?: $user->id(),
             editUrl: $user->editUrl(),
             data: collect($user->data()->all())->except(self::STRIPPED_USER_KEYS)->all(),
         );

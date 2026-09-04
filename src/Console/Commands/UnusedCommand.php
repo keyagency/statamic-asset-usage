@@ -37,7 +37,7 @@ class UnusedCommand extends Command
         if ($store->isStale()) {
             $this->components->error(
                 $store->exists()
-                    ? __('asset-usage::messages.errors.stale_index')
+                    ? 'The usage data is out of date. Refresh it before deleting anything.'
                     : 'No usage index yet. Run `php please asset-usage:index` first, or pass --fresh.'
             );
 
@@ -76,7 +76,7 @@ class UnusedCommand extends Command
         );
 
         $this->components->info(sprintf('%d unused %s.', count($assets), Str::plural('asset', count($assets))));
-        $this->components->warn(__('asset-usage::messages.not_scanned'));
+        $this->components->warn('"Unused" means no reference was found in the content that gets scanned. Templates, Glide URLs and data an addon keeps in its own store are not visible here, so check those before deleting.');
 
         if (! $this->option('delete')) {
             return self::SUCCESS;
@@ -116,7 +116,7 @@ class UnusedCommand extends Command
     private function delete(array $assets, Unused $unused): int
     {
         if (! $this->option('force') && ! $this->confirm(sprintf('Permanently delete these %d files?', count($assets)), false)) {
-            $this->components->warn(__('asset-usage::messages.delete.none'));
+            $this->components->warn('Nothing was deleted.');
 
             return self::SUCCESS;
         }
@@ -128,7 +128,7 @@ class UnusedCommand extends Command
              * Re-checked right before deleting: the index could have been
              * patched by a content save while the operator was reading the list.
              */
-            if ($blocker = $unused->blocker($asset)) {
+            if ($blocker = $unused->blocker($asset, 'en')) {
                 $this->components->warn("{$asset->id()}: {$blocker}");
 
                 continue;

@@ -2,6 +2,7 @@
 
 namespace KeyAgency\AssetUsage\Usage;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use KeyAgency\AssetUsage\Support\Settings;
@@ -120,6 +121,24 @@ class IndexStore
         return $meta['scan_urls'] !== Settings::scansUrls()
             || $meta['scanned_types'] !== Settings::scannedTypes()
             || $meta['include_working_copies'] !== Settings::includesWorkingCopies();
+    }
+
+    /**
+     * Whether the usage data has gone long enough without a full rebuild to be
+     * worth mentioning. Not the same thing as stale: an aged index is still
+     * built for the settings in force, so its numbers are as good as the last
+     * pass left them. A stale one is excluded because it already says more than
+     * this would, and two notices about the same button read as two problems.
+     */
+    public function isAged(): bool
+    {
+        if ($this->isStale() || ! $days = Settings::rebuildReminderDays()) {
+            return false;
+        }
+
+        $builtAt = $this->meta()['built_at'];
+
+        return $builtAt !== null && Carbon::parse($builtAt)->lt(now()->subDays($days));
     }
 
     public function write(UsageIndex $index, array $meta = []): void

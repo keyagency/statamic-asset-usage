@@ -59,7 +59,7 @@ export default {
         return {
             assets: [],
             meta: null,
-            index: { exists: false, stale: true, building: false, built_at: null, items_scanned: 0 },
+            index: { exists: false, stale: true, aged: false, auto_update: true, building: false, built_at: null, items_scanned: 0 },
             filters: { usage: 'all', container: null, site: ANY_SITE, search: '', sort: 'name_asc' },
             page: 1,
             /** False until the first response lands, so nothing flashes an empty or stale state. */
@@ -139,6 +139,16 @@ export default {
             const label = __('asset-usage::messages.delete.selected')
 
             return this.selected.length ? `${label} (${this.selected.length})` : label
+        },
+
+        /**
+         * What an overdue rebuild is worth saying depends on whether anything
+         * has been keeping the index current in the meantime.
+         */
+        agedInstructions() {
+            const key = this.index.auto_update ? 'aged_instructions' : 'aged_instructions_manual'
+
+            return __(`asset-usage::messages.index.${key}`, { time: this.index.built_at_relative })
         },
 
         busy() {
@@ -414,6 +424,14 @@ export default {
             variant="warning"
             :heading="index.exists ? __('asset-usage::messages.index.stale') : __('asset-usage::messages.index.not_ready')"
             :text="index.exists ? __('asset-usage::messages.index.stale_instructions') : __('asset-usage::messages.index.not_ready_instructions')"
+        />
+
+        <!-- Deliberately not a warning: the data is usable, a rebuild is just overdue. -->
+        <Alert
+            v-else-if="index.aged"
+            class="mb-4"
+            :heading="__('asset-usage::messages.index.aged')"
+            :text="agedInstructions"
         />
 
         <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">

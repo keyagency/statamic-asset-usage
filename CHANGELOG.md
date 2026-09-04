@@ -1,5 +1,16 @@
 # Release Notes
 
+## 1.1.1 (2026-09-04)
+
+### What's new
+- **The Tools page says when the usage data is due a rebuild.** How long that takes depends on `auto_update`: with it on the index is patched on every save, so the reminder waits 30 days and is only about what fires no event, such as files put on the disk directly. With it off nothing updates the index in between, so it waits 7. Both numbers live in `rebuild_reminder_days`, and either at 0 turns the reminder off.
+
+### What's fixed
+- **Nothing can be deleted before the first build.** Without usage data every asset looked unreferenced, so the Tools page offered deleting and put a count on "delete all unused" covering the whole library. The delete endpoints refused, but only after the fact. Assets are now blocked one by one with the reason, and the unused count is 0 until there is data behind it.
+- A user with neither a name nor an email no longer takes down the whole scan.
+- An update script adds `rebuild_reminder_days` to a published config. The addon falls back to its own defaults without it, so this is about the file showing everything there is to configure.
+- Console output is English throughout. A few messages were reaching for a translation key meant for the Control Panel, so `asset-usage:unused` mixed the site's language into an otherwise English report.
+
 ## 1.1.0 (2026-09-04)
 
 ### What's new

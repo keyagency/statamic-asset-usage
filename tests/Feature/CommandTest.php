@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 use KeyAgency\AssetUsage\Tests\TestCase;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
+use KeyAgency\AssetUsage\Usage\Unused;
 use PHPUnit\Framework\Attributes\Test;
 use Statamic\Facades\Asset;
 
@@ -202,7 +203,50 @@ class CommandTest extends TestCase
         // Whitespace-normalised, so console line wrapping can't break the match.
         $output = preg_replace('/\s+/', ' ', Artisan::output());
 
-        $this->assertStringContainsString(__('asset-usage::messages.not_scanned'), $output);
+        $this->assertStringContainsString('Templates, Glide URLs and data an addon keeps in its own store are not visible here', $output);
+    }
+
+    /**
+     * Console output is English whatever the site is set to, so a doctor report
+     * pasted into an issue reads the same for everyone. Half a command in the
+     * site's language and half in English is the failure this guards.
+     */
+    #[Test]
+    public function the_commands_stay_english_on_a_site_that_is_not()
+    {
+        $this->app->setLocale('nl');
+
+        $this->makeContainer('assets', ['img/unused.jpg']);
+        (new IndexBuilder(new IndexStore))->build();
+
+        $this->assertSame(0, $this->withoutMockingConsoleOutput()->artisan('statamic:asset-usage:unused'));
+
+        $output = preg_replace('/\s+/', ' ', Artisan::output());
+
+        $this->assertStringContainsString('Templates, Glide URLs and data an addon keeps in its own store are not visible here', $output);
+
+        /*
+         * Against the Dutch rendering rather than a fixed phrase, so the two
+         * assertions can't both hold if nl ever falls back to en.
+         */
+        $this->assertStringNotContainsString(__('asset-usage::messages.not_scanned', [], 'nl'), $output);
+    }
+
+    #[Test]
+    public function a_blocked_delete_reports_its_reason_in_english_too()
+    {
+        $this->app->setLocale('nl');
+
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/photo.jpg']);
+        (new IndexBuilder(new IndexStore))->build();
+
+        $unused = Unused::make(new IndexStore);
+
+        $this->assertSame(
+            __('asset-usage::messages.errors.asset_is_used', ['count' => 1], 'en'),
+            $unused->blocker(Asset::find('assets::img/photo.jpg'), 'en')
+        );
     }
 
     #[Test]

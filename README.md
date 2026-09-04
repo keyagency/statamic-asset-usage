@@ -73,7 +73,8 @@ Scanning a whole site per page load isn't viable, so usage lives in an index at 
 - built by `php please asset-usage:index`, or from the **Refresh usage data** button on the Tools page;
 - patched incrementally whenever content is saved or deleted, so it stays accurate on its own;
 - marked out of date automatically when you change a setting it was built with: the enabled containers, `scanned_types`, `scan_urls` or `include_working_copies`. While it's out of date the CP says so, the browser filter hides itself, and nothing can be deleted;
-- never built implicitly while rendering a page. Before the first build the column and the panel say "not checked yet" rather than pretending everything is unused.
+- never built implicitly while rendering a page. Before the first build the column and the panel say "not checked yet" rather than pretending everything is unused, and nothing can be deleted until there is data behind that verdict;
+- flagged on the Tools page once it has gone a while without a full rebuild (`rebuild_reminder_days`).
 
 Which assets exist is read through the container's asset query, the same source the asset browser uses, not through the container's file listing, which on the eloquent driver reports the container root only.
 
@@ -112,7 +113,7 @@ Above the per-container output it lists the content types actually being scanned
 Deleting is available from the Tools page (per row, for a checkbox selection, and as **Delete all unused**, which covers every unused asset the active filters match rather than only the page you're looking at, up to 500 per click, so a big cleanup takes a few) and from the CLI. Everything goes through the same rails:
 
 - the `delete unused assets` permission, on top of Statamic's own per-container asset permissions;
-- the index must be current;
+- the index must be current, and there has to be one at all: before the first build nothing is known to be unused, so nothing is deletable;
 - the asset must have zero usages, so a used asset can't be deleted from here at all;
 - `ignore` patterns and `minimum_age_in_days` are enforced server-side, not just in the UI.
 
@@ -140,6 +141,12 @@ return [
         'taxonomy_cascades' => true,
         'addon_settings' => true,
         'blueprints' => true,
+    ],
+
+    // Days without a full rebuild before the Tools page suggests one. 0 turns it off.
+    'rebuild_reminder_days' => [
+        'auto_update' => 30,
+        'manual' => 7,
     ],
 
     // Also count plain /assets/… URLs typed into text fields

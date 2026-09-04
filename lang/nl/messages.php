@@ -42,6 +42,9 @@ return [
         'not_ready_instructions' => 'Controleer het gebruik om te zien waar deze asset gebruikt wordt.',
         'stale' => 'De gebruiksgegevens zijn verouderd',
         'stale_instructions' => 'Ze zijn opgehaald voor andere containers of instellingen. Controleer opnieuw voor kloppende resultaten.',
+        'aged' => 'De gebruiksgegevens zijn al een tijd niet volledig gecontroleerd',
+        'aged_instructions' => 'De laatste volledige controle was :time. Opslaan en verwijderen zijn sindsdien verwerkt, maar een volledige controle pikt ook op wat buiten Statamic om is veranderd, zoals bestanden die rechtstreeks op de schijf zijn gezet.',
+        'aged_instructions_manual' => 'De laatste volledige controle was :time. Automatisch bijwerken staat uit, dus er is sindsdien niets aan veranderd en de gegevens kunnen achterlopen op je content.',
     ],
 
     'filters' => [
@@ -92,6 +95,7 @@ return [
 
     'errors' => [
         'stale_index' => 'De gebruiksgegevens zijn verouderd. Controleer opnieuw voordat je iets verwijdert.',
+        'no_usage_data' => 'Er zijn nog geen gebruiksgegevens, dus van niets is bekend dat het ongebruikt is. Controleer eerst voordat je iets verwijdert.',
         'asset_is_used' => 'Deze asset wordt op :count plekken gebruikt en is niet verwijderd.',
         'asset_ignored' => 'Deze asset is beschermd via de `ignore`-config en is niet verwijderd.',
         'asset_too_new' => 'Deze asset is minder dan :days dagen geleden geüpload en is niet verwijderd.',

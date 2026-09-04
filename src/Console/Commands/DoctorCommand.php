@@ -30,7 +30,7 @@ class DoctorCommand extends Command
         $containers = Containers::enabled();
 
         if ($containers->isEmpty()) {
-            $this->components->error(__('asset-usage::messages.no_containers'));
+            $this->components->error('No asset containers are enabled for this addon.');
 
             return self::FAILURE;
         }

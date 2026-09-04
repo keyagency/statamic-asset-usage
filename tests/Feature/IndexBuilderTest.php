@@ -394,6 +394,21 @@ class IndexBuilderTest extends TestCase
         $this->assertSame('share_image', $usage->field);
     }
 
+    /**
+     * `Item::$title` is not nullable, and a user with neither a name nor an
+     * email would otherwise take the whole build down with a TypeError.
+     */
+    #[Test]
+    public function a_user_with_nothing_to_call_it_by_does_not_break_the_scan()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/photo.jpg']);
+
+        User::make()->save();
+
+        $this->assertTrue($this->build()->isUsed('assets::img/photo.jpg'));
+    }
+
     #[Test]
     public function it_skips_content_types_that_are_turned_off()
     {

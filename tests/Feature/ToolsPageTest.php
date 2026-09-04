@@ -8,6 +8,7 @@ use KeyAgency\AssetUsage\ServiceProvider;
 use KeyAgency\AssetUsage\Tests\TestCase;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
+use KeyAgency\AssetUsage\Usage\Unused;
 use PHPUnit\Framework\Attributes\Test;
 use Statamic\Facades\Asset;
 use Statamic\Facades\Role;
@@ -293,6 +294,53 @@ class ToolsPageTest extends TestCase
 
         $this->assertNull(Asset::find('assets::img/unused.jpg'));
         $this->assertNotNull(Asset::find('assets::img/used.jpg'));
+    }
+
+    /**
+     * Without an index nothing is known to be unused, so the safety rail has to
+     * say so per asset rather than let the endpoint check be the only thing
+     * standing between a fresh install and a bulk delete.
+     */
+    #[Test]
+    public function nothing_is_deletable_before_the_first_build()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+
+        $unused = Unused::make(new IndexStore);
+
+        $this->assertNotNull($unused->blocker(Asset::find('assets::img/photo.jpg')));
+        $this->assertSame([], $unused->ids());
+    }
+
+    #[Test]
+    public function the_listing_offers_no_delete_before_the_first_build()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+
+        $this->actingAs($this->superUser())
+            ->getJson(cp_route('asset-usage.assets'))
+            ->assertOk()
+            ->assertJsonPath('data.0.blocker', __('asset-usage::messages.errors.no_usage_data'))
+            ->assertJsonPath('meta.unused_total', 0);
+    }
+
+    /**
+     * An index built for other settings is unusable too, but for a different
+     * reason, and the row should say which one it is.
+     */
+    #[Test]
+    public function a_stale_index_blocks_deleting_and_says_why()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $this->build();
+
+        config(['statamic.asset-usage.scan_urls' => false]);
+
+        $this->actingAs($this->superUser())
+            ->getJson(cp_route('asset-usage.assets'))
+            ->assertOk()
+            ->assertJsonPath('data.0.blocker', __('asset-usage::messages.errors.stale_index'))
+            ->assertJsonPath('meta.unused_total', 0);
     }
 
     #[Test]

@@ -76,6 +76,24 @@ final class Settings
         return (bool) config('statamic.asset-usage.auto_update', true);
     }
 
+    /**
+     * How many days the usage data may go without a full rebuild before the CP
+     * suggests one, or 0 when the reminder is off.
+     *
+     * Read per sub-key with its own default, so a config published before this
+     * setting existed, or one that names only the other half, still gets the
+     * shipped number instead of a silent 0. Laravel merges the key as a whole,
+     * the same trap `scanned_types` falls into.
+     */
+    public static function rebuildReminderDays(): int
+    {
+        $configured = config('statamic.asset-usage.rebuild_reminder_days');
+
+        [$key, $default] = self::autoUpdates() ? ['auto_update', 30] : ['manual', 7];
+
+        return max(0, (int) (is_array($configured) ? ($configured[$key] ?? $default) : $default));
+    }
+
     public static function showsEditorPanel(): bool
     {
         return (bool) config('statamic.asset-usage.editor_panel', true);

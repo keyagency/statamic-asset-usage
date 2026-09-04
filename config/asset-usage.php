@@ -97,6 +97,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Rebuild Reminder
+    |--------------------------------------------------------------------------
+    |
+    | How many days the usage data may go without a full rebuild before the
+    | Tools page suggests one. Two numbers, because what age means depends on
+    | `auto_update` above:
+    |
+    | - auto_update: the index is patched on every save, so it is not drifting.
+    |   The reminder is only about the few things that fire no event, such as
+    |   files put on the disk outside Statamic.
+    | - manual: nothing is updating the index in between, so age is exactly how
+    |   far behind your content it has fallen.
+    |
+    | Either one set to 0 turns the reminder off. This is a reminder, not a
+    | correctness check: an index built for other settings is reported as out
+    | of date regardless of its age.
+    |
+    */
+
+    'rebuild_reminder_days' => [
+        'auto_update' => 30,
+        'manual' => 7,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Control Panel
     |--------------------------------------------------------------------------
     |

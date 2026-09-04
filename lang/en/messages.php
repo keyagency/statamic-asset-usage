@@ -42,6 +42,9 @@ return [
         'not_ready_instructions' => 'Refresh the usage data to see where this asset is used.',
         'stale' => 'The usage data is out of date',
         'stale_instructions' => 'It was collected for different containers or settings. Refresh it to get accurate results.',
+        'aged' => 'The usage data has not been rebuilt in a while',
+        'aged_instructions' => 'It was last rebuilt :time. Saves and deletes have been applied since, but a rebuild also picks up anything that changed without Statamic noticing, such as files put on the disk directly.',
+        'aged_instructions_manual' => 'It was last rebuilt :time. Automatic updating is off, so nothing has changed it since and it may be behind your content.',
     ],
 
     'filters' => [
@@ -92,6 +95,7 @@ return [
 
     'errors' => [
         'stale_index' => 'The usage data is out of date. Refresh it before deleting anything.',
+        'no_usage_data' => 'There is no usage data yet, so nothing is known to be unused. Refresh it before deleting anything.',
         'asset_is_used' => 'This asset is used in :count places and was not deleted.',
         'asset_ignored' => 'This asset is protected by the `ignore` config and was not deleted.',
         'asset_too_new' => 'This asset was uploaded less than :days days ago and was not deleted.',

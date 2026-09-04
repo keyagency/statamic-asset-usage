@@ -76,7 +76,8 @@ Tests run against in-memory SQLite via Orchestra Testbench + `Statamic\Testing\A
 
 ## Conventions
 
-- User-facing strings live in `lang/en/messages.php` and `lang/nl/messages.php`. Add keys there, don't inline literals, and keep both locales in sync. Related strings are grouped under their own array key (`index`, `filters`, `sort`, `delete`, `errors`, …) rather than prefixed.
+- Console output is English, always, written as literals in the command itself. It ends up in bug reports, and a diagnostic in the reporter's language is harder to read, not easier.
+- Other user-facing strings live in `lang/en/messages.php` and `lang/nl/messages.php`. Add keys there, don't inline literals, and keep both locales in sync. Related strings are grouped under their own array key (`index`, `filters`, `sort`, `delete`, `errors`, …) rather than prefixed.
 - Config is read through `Support\Settings`, not scattered `config()` calls.
 
 Four rules are easy to break; please preserve them:
