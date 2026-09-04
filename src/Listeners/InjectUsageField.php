@@ -11,7 +11,7 @@ use Statamic\Events\AssetContainerBlueprintFound;
  * covers both places usage shows up: the asset editor renders it as a panel,
  * and `Blueprint::columns()` turns it into the browser column.
  *
- * `visibility: computed` is what keeps it out of the saved data — see
+ * `visibility: computed` is what keeps it out of the saved data. See
  * Fieldtypes\AssetUsage.
  */
 class InjectUsageField
@@ -41,8 +41,8 @@ class InjectUsageField
             'type' => self::HANDLE,
             /*
              * One `display` drives both the editor field label and the browser
-             * column header (`Blueprint::columns()` reads it), so it says "Used"
-             * — the column is a tick or a cross. The panel spells out "Used in
+             * column header (`Blueprint::columns()` reads it), so it says "Used",
+             * because the column is a tick or a cross. The panel spells out "Used in
              * N places" on its own toggle.
              *
              * Without the panel the field is only here to produce the column,

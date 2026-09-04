@@ -4,6 +4,7 @@ namespace KeyAgency\AssetUsage\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use KeyAgency\AssetUsage\Usage\Reference;
@@ -42,6 +43,8 @@ class DoctorCommand extends Command
             ? ($store->isStale() ? '<comment>out of date</comment>' : 'up to date')
             : '<comment>not built yet</comment>');
         $this->components->twoColumnDetail('Stache watcher', config('statamic.stache.watcher') ? 'on' : 'off (listings are cached)');
+        $this->components->twoColumnDetail('Scanned types', implode(', ', Settings::scannedTypes()));
+        $this->reportUnconfiguredTypes();
         $this->newLine();
 
         foreach ($containers as $container) {
@@ -62,7 +65,7 @@ class DoctorCommand extends Command
             $onDisk = $this->rawListing($container);
 
             $this->components->twoColumnDetail(
-                'Asset query — what this addon indexes',
+                'Asset query (what this addon indexes)',
                 sprintf('%d files (%s nested)', $paths->count(), $this->highlight($nested->count()))
             );
             $this->components->twoColumnDetail('Container listing files()', $this->compare($listed, $paths->count()));
@@ -96,10 +99,35 @@ class DoctorCommand extends Command
         $this->components->info('Rows on the Tools page come from the asset query. A lower "Container listing" number is expected on the eloquent driver and harmless.');
 
         if ($unimported) {
-            $this->components->warn('Some files on disk are not known as assets, so nothing — not this addon, not the asset browser — can report on them. On the eloquent driver, `php please eloquent:import-assets` brings them in.');
+            $this->components->warn('Some files on disk are not known as assets, so nothing (not this addon, not the asset browser) can report on them. On the eloquent driver, `php please eloquent:import-assets` brings them in.');
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * A published config replaces `scanned_types` as a whole, so a config
+     * written before a type existed leaves that type switched off without ever
+     * saying so.
+     */
+    private function reportUnconfiguredTypes(): void
+    {
+        $configured = config('statamic.asset-usage.scanned_types');
+
+        if (! is_array($configured)) {
+            return;
+        }
+
+        $missing = array_diff(Settings::SCANNABLE_TYPES, array_keys($configured));
+
+        if ($missing === []) {
+            return;
+        }
+
+        $this->components->warn(sprintf(
+            'These types are not in your config, so nothing of theirs is scanned: %s. Add them to `scanned_types` in config/statamic/asset-usage.php, then refresh the usage data.',
+            implode(', ', $missing)
+        ));
     }
 
     /**

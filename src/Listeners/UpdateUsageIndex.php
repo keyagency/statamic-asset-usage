@@ -10,11 +10,18 @@ use KeyAgency\AssetUsage\Usage\Item;
 use KeyAgency\AssetUsage\Usage\Items;
 use KeyAgency\AssetUsage\Usage\ItemUsageUpdater;
 use KeyAgency\AssetUsage\Usage\Usage;
+use Statamic\Events\AddonSettingsSaved;
 use Statamic\Events\AssetDeleted;
 use Statamic\Events\AssetReplaced;
 use Statamic\Events\AssetSaved;
+use Statamic\Events\BlueprintDeleted;
+use Statamic\Events\BlueprintSaved;
+use Statamic\Events\CollectionDeleted;
+use Statamic\Events\CollectionSaved;
 use Statamic\Events\EntryDeleted;
 use Statamic\Events\EntrySaved;
+use Statamic\Events\FieldsetDeleted;
+use Statamic\Events\FieldsetSaved;
 use Statamic\Events\GlobalVariablesDeleted;
 use Statamic\Events\GlobalVariablesSaved;
 use Statamic\Events\LocalizedTermSaved;
@@ -24,6 +31,8 @@ use Statamic\Events\RevisionDeleted;
 use Statamic\Events\SubmissionDeleted;
 use Statamic\Events\SubmissionSaved;
 use Statamic\Events\Subscriber;
+use Statamic\Events\TaxonomyDeleted;
+use Statamic\Events\TaxonomySaved;
 use Statamic\Events\TermDeleted;
 use Statamic\Events\TermSaved;
 use Statamic\Events\UserDeleted;
@@ -57,6 +66,15 @@ class UpdateUsageIndex extends Subscriber implements ShouldQueue
         AssetSaved::class => 'handleAssetSaved',
         AssetReplaced::class => 'handleAssetReplaced',
         AssetDeleted::class => 'handleAssetDeleted',
+        CollectionSaved::class => 'handleCollectionSaved',
+        CollectionDeleted::class => 'handleCollectionDeleted',
+        TaxonomySaved::class => 'handleTaxonomySaved',
+        TaxonomyDeleted::class => 'handleTaxonomyDeleted',
+        AddonSettingsSaved::class => 'handleAddonSettingsSaved',
+        BlueprintSaved::class => 'handleBlueprintSaved',
+        BlueprintDeleted::class => 'handleBlueprintDeleted',
+        FieldsetSaved::class => 'handleFieldsetSaved',
+        FieldsetDeleted::class => 'handleFieldsetDeleted',
     ];
 
     public function handleEntrySaved(EntrySaved $event): void
@@ -211,7 +229,7 @@ class UpdateUsageIndex extends Subscriber implements ShouldQueue
         /*
          * A rename fires this event with the new path. References in content are
          * rewritten by Statamic's own listener, which fires the content events
-         * that patch the index — but the old id's rows would linger until then,
+         * that patch the index, but the old id's rows would linger until then,
          * and forever if reference updating is switched off.
          */
         if (($original = $asset->getOriginal('path')) && $original !== $asset->path()) {
@@ -245,6 +263,82 @@ class UpdateUsageIndex extends Subscriber implements ShouldQueue
         $this->forgetKeys(Usage::makeItemKey('asset', $asset->id(), null));
     }
 
+    public function handleCollectionSaved(CollectionSaved $event): void
+    {
+        if (! Settings::scans('collection_cascades')) {
+            return;
+        }
+
+        $this->update(Items::fromCollection($event->collection));
+    }
+
+    /**
+     * Statamic deletes a collection's entries and trees but leaves its
+     * blueprints on disk, and fires no BlueprintDeleted for them, so their
+     * defaults have to go from here or they'd hold assets until the next
+     * rebuild dropped them anyway.
+     */
+    public function handleCollectionDeleted(CollectionDeleted $event): void
+    {
+        $this->forgetKeys(Usage::makeItemKey('collection', $event->collection->handle(), null));
+
+        $this->forgetPrefixes(Items::blueprintKeyPrefix('collections/'.$event->collection->handle()));
+    }
+
+    public function handleTaxonomySaved(TaxonomySaved $event): void
+    {
+        if (! Settings::scans('taxonomy_cascades')) {
+            return;
+        }
+
+        $this->update(Items::fromTaxonomy($event->taxonomy));
+    }
+
+    /** Term blueprints outlive their taxonomy the same way. */
+    public function handleTaxonomyDeleted(TaxonomyDeleted $event): void
+    {
+        $this->forgetKeys(Usage::makeItemKey('taxonomy', $event->taxonomy->handle(), null));
+
+        $this->forgetPrefixes(Items::blueprintKeyPrefix('taxonomies/'.$event->taxonomy->handle()));
+    }
+
+    public function handleAddonSettingsSaved(AddonSettingsSaved $event): void
+    {
+        if (! Settings::scans('addon_settings')) {
+            return;
+        }
+
+        $this->update(Items::fromAddonSettings($event->settings->addon(), $event->settings->raw()));
+    }
+
+    public function handleBlueprintSaved(BlueprintSaved $event): void
+    {
+        if (! Settings::scans('blueprints')) {
+            return;
+        }
+
+        $this->update(Items::fromBlueprint($event->blueprint));
+    }
+
+    public function handleBlueprintDeleted(BlueprintDeleted $event): void
+    {
+        $this->forgetKeys(Usage::makeItemKey('blueprint', Items::blueprintKey($event->blueprint), null));
+    }
+
+    public function handleFieldsetSaved(FieldsetSaved $event): void
+    {
+        if (! Settings::scans('blueprints')) {
+            return;
+        }
+
+        $this->update(Items::fromFieldset($event->fieldset));
+    }
+
+    public function handleFieldsetDeleted(FieldsetDeleted $event): void
+    {
+        $this->forgetKeys(Usage::makeItemKey('fieldset', $event->fieldset->handle(), null));
+    }
+
     private function update(Item ...$items): void
     {
         if (Settings::autoUpdates()) {
@@ -256,6 +350,13 @@ class UpdateUsageIndex extends Subscriber implements ShouldQueue
     {
         if (Settings::autoUpdates()) {
             $this->updater()->forget(...$itemKeys);
+        }
+    }
+
+    private function forgetPrefixes(string ...$prefixes): void
+    {
+        if (Settings::autoUpdates()) {
+            $this->updater()->forgetPrefixes(...$prefixes);
         }
     }
 

@@ -13,7 +13,7 @@ use Statamic\Query\Scopes\Filter;
  * The usage index isn't part of the asset query, so the filter resolves the
  * matching paths first and constrains the query to them. Statamic switches the
  * browser to its flat search endpoint as soon as a filter is active, which is
- * where filters get applied — the folder view has none.
+ * where filters get applied, and the folder view has none.
  */
 class AssetUsage extends Filter
 {

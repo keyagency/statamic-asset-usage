@@ -9,7 +9,7 @@ namespace KeyAgency\AssetUsage\Support;
 final class Settings
 {
     /** Every content type `scanned_types` can switch on or off. */
-    public const SCANNABLE_TYPES = ['entries', 'globals', 'terms', 'navs', 'users', 'assets', 'form_submissions'];
+    public const SCANNABLE_TYPES = ['entries', 'globals', 'terms', 'navs', 'users', 'assets', 'form_submissions', 'collection_cascades', 'taxonomy_cascades', 'addon_settings', 'blueprints'];
 
     /**
      * The configured container handles, or null when all containers apply.
@@ -31,7 +31,7 @@ final class Settings
      * Whether a content type is scanned.
      *
      * A `scanned_types` array in the config is read as the complete set, so
-     * listing only the types you want is enough — anything left out is off.
+     * listing only the types you want is enough, and anything left out is off.
      * Laravel merges that key as a whole, which means a config with just
      * `['entries' => true]` really does mean "entries only". Everything is
      * scanned when the key is missing altogether.

@@ -32,6 +32,15 @@ final class Usage
         return $type.'::'.$key.'::'.($site ?? '-');
     }
 
+    /**
+     * The start of every item key of one type whose key begins with
+     * `$keyPrefix`, for forgetting a group of items at once.
+     */
+    public static function makeItemKeyPrefix(string $type, string $keyPrefix): string
+    {
+        return $type.'::'.$keyPrefix;
+    }
+
     public function toArray(): array
     {
         return [

@@ -7,7 +7,7 @@ use KeyAgency\AssetUsage\Support\Defaults;
 /**
  * The in-memory usage index: which assets are used where, plus a reverse map
  * from item to assets. The reverse map is what makes an incremental update
- * possible — without it, dropping one entry's contributions would mean walking
+ * possible. Without it, dropping one entry's contributions would mean walking
  * every asset's usage list.
  */
 final class UsageIndex
@@ -70,6 +70,19 @@ final class UsageIndex
         }
 
         unset($this->items[$itemKey]);
+    }
+
+    /**
+     * Drop everything the items under one key prefix contributed, for when a
+     * single deletion takes a group of items with it.
+     */
+    public function forgetPrefix(string $prefix): void
+    {
+        foreach (array_keys($this->items) as $itemKey) {
+            if (str_starts_with($itemKey, $prefix)) {
+                $this->forget($itemKey);
+            }
+        }
     }
 
     /**

@@ -2,11 +2,15 @@
 
 namespace KeyAgency\AssetUsage\Tests\Feature;
 
+use Illuminate\Support\Facades\File;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Tests\TestCase;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use PHPUnit\Framework\Attributes\Test;
+use Statamic\Facades\Blueprint;
+use Statamic\Facades\Collection;
+use Statamic\Facades\Fieldset;
 use Statamic\Facades\Form;
 use Statamic\Facades\GlobalSet;
 use Statamic\Facades\Nav;
@@ -166,6 +170,231 @@ class IndexBuilderTest extends TestCase
     }
 
     #[Test]
+    public function it_records_an_asset_used_in_a_collection_cascade()
+    {
+        $this->makeContainer('assets', ['img/fallback.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+
+        Collection::findByHandle('pages')->cascade(['seo' => ['image' => 'img/fallback.jpg']])->save();
+
+        $index = $this->build();
+
+        $usage = $index->for('assets::img/fallback.jpg')[0];
+        $this->assertSame('collection', $usage->type);
+        $this->assertSame('Pages', $usage->title);
+        $this->assertSame('seo.image', $usage->field);
+        $this->assertNotNull($usage->editUrl);
+    }
+
+    #[Test]
+    public function it_records_an_asset_used_in_a_taxonomy_cascade()
+    {
+        $this->makeContainer('assets', ['img/topic.jpg']);
+
+        Taxonomy::make('topics')->title('Topics')->cascade(['seo' => ['image' => 'img/topic.jpg']])->save();
+
+        $index = $this->build();
+
+        $usage = $index->for('assets::img/topic.jpg')[0];
+        $this->assertSame('taxonomy', $usage->type);
+        $this->assertSame('Topics', $usage->title);
+        $this->assertSame('seo.image', $usage->field);
+    }
+
+    /**
+     * Addons keep their own settings in `resources/addons/{slug}.yaml`, which
+     * is where a site-wide default image tends to live.
+     */
+    #[Test]
+    public function it_records_an_asset_used_in_an_addons_settings()
+    {
+        $this->makeContainer('assets', ['img/social.jpg']);
+
+        $this->fakeAddon('acme/seo-thing', ['site_defaults' => ['image' => 'img/social.jpg']]);
+
+        $index = $this->build();
+
+        $usage = $index->for('assets::img/social.jpg')[0];
+        $this->assertSame('addon_settings', $usage->type);
+        $this->assertSame('site_defaults.image', $usage->field);
+    }
+
+    /**
+     * Statamic saves addon settings under the addon's slug but reads them back
+     * under its package name, so an addon that overrides its slug can have a
+     * settings file it cannot resolve. That is the addon's problem, not a
+     * reason for the whole scan to die.
+     */
+    #[Test]
+    public function an_addon_whose_settings_cannot_be_read_does_not_break_the_scan()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/photo.jpg']);
+
+        File::ensureDirectoryExists(resource_path('addons'));
+        File::put(resource_path('addons/statamic-asset-usage.yaml'), "site_defaults:\n  image: img/photo.jpg\n");
+
+        $this->assertTrue($this->build()->isUsed('assets::img/photo.jpg'));
+    }
+
+    /**
+     * A `default` in a blueprint holds the asset until an entry is saved over
+     * it, and on a field nobody has touched it holds it forever.
+     */
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_an_entry_blueprint()
+    {
+        $this->makeContainer('assets', ['img/placeholder.jpg']);
+        $this->makeBlueprint('collections/pages', 'pages', ['hero' => 'img/placeholder.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+
+        $index = $this->build();
+
+        $usage = $index->for('assets::img/placeholder.jpg')[0];
+        $this->assertSame('blueprint', $usage->type);
+        $this->assertSame('hero', $usage->field);
+        $this->assertNotNull($usage->editUrl);
+    }
+
+    #[Test]
+    public function it_records_a_default_nested_in_a_grid_field()
+    {
+        $this->makeContainer('assets', ['img/row.jpg']);
+        Blueprint::make('pages')->setNamespace('collections/pages')->setContents([
+            'tabs' => ['main' => ['fields' => [[
+                'handle' => 'rows',
+                'field' => [
+                    'type' => 'grid',
+                    'fields' => [[
+                        'handle' => 'image',
+                        'field' => ['type' => 'assets', 'container' => 'assets', 'max_files' => 1, 'default' => 'img/row.jpg'],
+                    ]],
+                ],
+            ]]]],
+        ])->save();
+
+        $this->makeEntry('home', ['title' => 'Home']);
+
+        $usage = $this->build()->for('assets::img/row.jpg')[0];
+        $this->assertSame('blueprint', $usage->type);
+        $this->assertSame('rows.image', $usage->field);
+    }
+
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_a_term_blueprint()
+    {
+        $this->makeContainer('assets', ['img/term-default.jpg']);
+        Taxonomy::make('topics')->title('Topics')->save();
+
+        $this->makeBlueprint('taxonomies/topics', 'topics', ['icon' => 'img/term-default.jpg']);
+
+        $this->assertSame('blueprint', $this->build()->for('assets::img/term-default.jpg')[0]->type);
+    }
+
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_a_global_set_blueprint()
+    {
+        $this->makeContainer('assets', ['img/global-default.jpg']);
+        GlobalSet::make('branding')->title('Branding')->save();
+
+        $this->makeBlueprint('globals', 'branding', ['logo' => 'img/global-default.jpg']);
+
+        $this->assertSame('blueprint', $this->build()->for('assets::img/global-default.jpg')[0]->type);
+    }
+
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_an_asset_container_blueprint()
+    {
+        $this->makeContainer('assets', ['img/container-default.jpg']);
+
+        $this->makeBlueprint('assets', 'assets', ['fallback' => 'img/container-default.jpg']);
+
+        $this->assertSame('blueprint', $this->build()->for('assets::img/container-default.jpg')[0]->type);
+    }
+
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_a_form_blueprint()
+    {
+        $this->makeContainer('assets', ['img/form-default.jpg']);
+        Form::make('apply')->title('Apply')->save();
+
+        $this->makeBlueprint('forms', 'apply', ['attachment' => 'img/form-default.jpg']);
+
+        $this->assertSame('blueprint', $this->build()->for('assets::img/form-default.jpg')[0]->type);
+    }
+
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_a_nav_blueprint()
+    {
+        $this->makeContainer('assets', ['img/nav-default.jpg']);
+        Nav::make()->handle('main')->title('Main Navigation')->save();
+
+        $this->makeBlueprint('navigation', 'main', ['icon' => 'img/nav-default.jpg']);
+
+        $this->assertSame('blueprint', $this->build()->for('assets::img/nav-default.jpg')[0]->type);
+    }
+
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_the_user_blueprint()
+    {
+        $this->makeContainer('assets', ['img/user-default.jpg']);
+
+        $this->makeBlueprint(null, 'user', ['avatar' => 'img/user-default.jpg']);
+
+        $this->assertSame('blueprint', $this->build()->for('assets::img/user-default.jpg')[0]->type);
+    }
+
+    /**
+     * A default is a value, not more blueprint, so nothing inside it is read as
+     * field configuration. A field handled `default` in there would otherwise
+     * take the place of the default it sits in, and the rest of that default
+     * would go with it.
+     */
+    #[Test]
+    public function it_keeps_the_whole_default_when_the_value_has_a_default_of_its_own()
+    {
+        $this->makeContainer('assets', ['img/logo.jpg', 'img/fallback.jpg']);
+        Blueprint::make('pages')->setNamespace('collections/pages')->setContents([
+            'tabs' => ['main' => ['fields' => [[
+                'handle' => 'settings',
+                'field' => [
+                    'type' => 'group',
+                    'default' => [
+                        'logo' => 'img/logo.jpg',
+                        'default' => 'img/fallback.jpg',
+                    ],
+                ],
+            ]]]],
+        ])->save();
+
+        $this->makeEntry('home', ['title' => 'Home']);
+
+        $index = $this->build();
+
+        $this->assertTrue($index->isUsed('assets::img/logo.jpg'));
+        $this->assertTrue($index->isUsed('assets::img/fallback.jpg'));
+    }
+
+    /**
+     * A fieldset's defaults are scanned on the fieldset itself, so an asset in
+     * one is found whether or not a blueprint happens to import it.
+     */
+    #[Test]
+    public function it_records_an_asset_set_as_a_default_in_a_fieldset()
+    {
+        $this->makeContainer('assets', ['img/fieldset-default.jpg']);
+
+        Fieldset::make('seo')->setContents(['title' => 'Seo', 'fields' => [[
+            'handle' => 'share_image',
+            'field' => ['type' => 'assets', 'container' => 'assets', 'max_files' => 1, 'default' => 'img/fieldset-default.jpg'],
+        ]]])->save();
+
+        $usage = $this->build()->for('assets::img/fieldset-default.jpg')[0];
+        $this->assertSame('fieldset', $usage->type);
+        $this->assertSame('share_image', $usage->field);
+    }
+
+    #[Test]
     public function it_skips_content_types_that_are_turned_off()
     {
         config(['statamic.asset-usage.scanned_types.users' => false]);
@@ -273,5 +502,26 @@ class IndexBuilderTest extends TestCase
         $this->assertFalse($store->exists());
         $this->assertTrue($store->isStale());
         $this->assertNull($store->index());
+    }
+
+    /**
+     * A global set and a navigation can share a handle, and their blueprints
+     * are scanned in the same pass.
+     */
+    #[Test]
+    public function it_scans_the_blueprints_of_two_owners_that_share_a_handle()
+    {
+        $this->makeContainer('assets', ['img/global.jpg', 'img/nav.jpg']);
+
+        GlobalSet::make('main')->title('Main')->save();
+        Nav::make()->handle('main')->title('Main Navigation')->save();
+
+        $this->makeBlueprint('globals', 'main', ['logo' => 'img/global.jpg']);
+        $this->makeBlueprint('navigation', 'main', ['icon' => 'img/nav.jpg']);
+
+        $index = $this->build();
+
+        $this->assertTrue($index->isUsed('assets::img/global.jpg'));
+        $this->assertTrue($index->isUsed('assets::img/nav.jpg'));
     }
 }

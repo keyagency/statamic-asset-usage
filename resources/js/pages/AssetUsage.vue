@@ -18,7 +18,7 @@ import UsageList from '../components/UsageList.vue'
 
 /**
  * Stands in for "any site" in the filter. An option can't carry an empty
- * value — the Select refuses to open when one does — and no site handle can
+ * value (the Select refuses to open when one does) and no site handle can
  * contain an asterisk, so this can never collide with a real one.
  */
 const ANY_SITE = '*'
@@ -133,7 +133,7 @@ export default {
 
         /**
          * The button stays visible while nothing is selected, so it only carries
-         * a count once there is one — "(0)" reads as a broken counter.
+         * a count once there is one, because "(0)" reads as a broken counter.
          */
         deleteSelectedText() {
             const label = __('asset-usage::messages.delete.selected')
@@ -603,6 +603,14 @@ export default {
             <Text
                 as="p"
                 class="mx-auto max-w-2xl"
+                size="sm"
+                variant="subtle"
+                :text="__('asset-usage::messages.not_scanned')"
+            />
+
+            <Text
+                as="p"
+                class="mx-auto mt-2 max-w-2xl"
                 size="sm"
                 variant="subtle"
                 :text="__('asset-usage::messages.disclaimer')"

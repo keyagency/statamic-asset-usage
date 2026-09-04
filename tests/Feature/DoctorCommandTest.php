@@ -19,7 +19,7 @@ class DoctorCommandTest extends TestCase
 
         $this->artisan('statamic:asset-usage:doctor')
             ->expectsOutputToContain('Container: assets')
-            ->expectsOutputToContain('Asset query — what this addon indexes')
+            ->expectsOutputToContain('Asset query (what this addon indexes)')
             ->assertSuccessful();
     }
 
@@ -49,5 +49,36 @@ class DoctorCommandTest extends TestCase
         $this->makeContainer('assets', ['root.jpg']);
 
         $this->artisan('statamic:asset-usage:doctor')->assertFailed();
+    }
+
+    /**
+     * A published config replaces `scanned_types` wholesale, so a config
+     * written before a type existed silently switches that type off.
+     */
+    #[Test]
+    public function it_names_the_scanned_types_a_published_config_is_missing()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+
+        config(['statamic.asset-usage.scanned_types' => ['entries' => true]]);
+
+        $this->assertSame(0, $this->withoutMockingConsoleOutput()->artisan('statamic:asset-usage:doctor'));
+
+        $text = Artisan::output();
+
+        $this->assertStringContainsString('not in your config', $text);
+        $this->assertStringContainsString('addon_settings', $text);
+        $this->assertStringContainsString('blueprints', $text);
+    }
+
+    #[Test]
+    public function it_does_not_complain_when_every_scanned_type_is_configured()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+
+        $output = $this->withoutMockingConsoleOutput()->artisan('statamic:asset-usage:doctor');
+
+        $this->assertSame(0, $output);
+        $this->assertStringNotContainsString('not in your config', Artisan::output());
     }
 }

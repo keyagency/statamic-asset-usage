@@ -32,7 +32,7 @@ class AssetUsageController extends CpController
     /**
      * How many assets one "delete all unused" request will remove. A cleanup can
      * span thousands of files, and a request that runs into the time limit
-     * halfway is worse than one that finishes and leaves a remainder — the
+     * halfway is worse than one that finishes and leaves a remainder. The
      * overview reports what is left, so the button can simply be used again.
      */
     private const MAX_BULK_DELETE = 500;
@@ -308,7 +308,7 @@ class AssetUsageController extends CpController
 
     /**
      * Order a filtered set of ids. Path order is applied first, so that it is
-     * also the tie-breaker within an equal usage count — usort is stable.
+     * also the tie-breaker within an equal usage count, because usort is stable.
      *
      * @param  string[]  $ids
      * @return string[]
@@ -386,10 +386,10 @@ class AssetUsageController extends CpController
             'building' => $store->isBuilding(),
             'built_at' => $meta['built_at'],
             /*
-             * Spelled out and localised — isoFormat() gives translated month
+             * Spelled out and localised, because isoFormat() gives translated month
              * names, which strtotime-style formats do not.
              */
-            'built_at_formatted' => $builtAt?->isoFormat('D MMMM YYYY [—] HH:mm'),
+            'built_at_formatted' => $builtAt?->isoFormat('D MMMM YYYY, HH:mm'),
             'built_at_relative' => $builtAt?->diffForHumans(),
             'items_scanned' => $meta['items_scanned'],
         ];

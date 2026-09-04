@@ -5,7 +5,7 @@ import UsageList from '../components/UsageList.vue'
 
 /**
  * The "Used in" panel in the asset editor. Everything it shows comes from field
- * meta, resolved server-side in Fieldtypes\AssetUsage::preload() — there is no
+ * meta, resolved server-side in Fieldtypes\AssetUsage::preload(), so there is no
  * value to edit here, so the field never emits an update.
  *
  * The list sits behind a toggle: an asset used in dozens of places would

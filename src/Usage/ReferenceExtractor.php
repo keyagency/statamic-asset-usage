@@ -10,8 +10,8 @@ use KeyAgency\AssetUsage\Support\Settings;
  * The walk is deliberately generic rather than blueprint-driven: every format
  * Statamic uses is recognisable from the string itself (`asset::container::path`
  * for Link fields, Bard image nodes and Bard link marks, `statamic://asset::…`
- * inside Markdown and Bard HTML), and the one exception — the bare,
- * container-relative path an `assets` field stores — is resolved against the
+ * inside Markdown and Bard HTML), and the one exception, the bare,
+ * container-relative path an `assets` field stores, is resolved against the
  * list of paths that actually exist. That means nav trees and form submissions,
  * which have no useful blueprint, are covered by the same code, and so is any
  * addon fieldtype that stores one of the standard formats.
@@ -106,7 +106,7 @@ final class ReferenceExtractor
 
     /**
      * An `assets` field stores a plain container-relative path, so the whole
-     * value is the reference — anything else in the string means it isn't one.
+     * value is the reference; anything else in the string means it isn't one.
      */
     private function scanBarePath(string $value, string $path): void
     {

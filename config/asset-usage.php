@@ -27,7 +27,18 @@ return [
     |
     | This list is the complete set: a type you leave out is not scanned, so
     | ['entries' => true] really does mean entries only. Changing it makes the
-    | usage data out of date — refresh it afterwards.
+    | usage data out of date, so refresh it afterwards.
+    |
+    | Besides the content itself, the last four cover the places an asset can be
+    | referenced without ever being saved onto a single item:
+    |
+    | - collection_cascades / taxonomy_cascades: the cascade (`inject`) values
+    |   that fall through to every entry or term, where an addon such as an SEO
+    |   one stores its per-section defaults.
+    | - addon_settings: what addons save in resources/addons/{slug}.yaml, which
+    |   is where a site-wide default image usually lives.
+    | - blueprints: the `default` values in blueprints and fieldsets, which hold
+    |   an asset until something is saved over them.
     |
     */
 
@@ -39,6 +50,10 @@ return [
         'users' => true,
         'assets' => true,
         'form_submissions' => true,
+        'collection_cascades' => true,
+        'taxonomy_cascades' => true,
+        'addon_settings' => true,
+        'blueprints' => true,
     ],
 
     /*

@@ -6,12 +6,16 @@ use KeyAgency\AssetUsage\Tests\TestCase;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use PHPUnit\Framework\Attributes\Test;
+use Statamic\Facades\Addon;
 use Statamic\Facades\Asset;
+use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Fieldset;
 use Statamic\Facades\GlobalSet;
 use Statamic\Facades\Nav;
 use Statamic\Facades\Site;
+use Statamic\Facades\Taxonomy;
 use Statamic\Facades\User;
 
 class IncrementalUpdateTest extends TestCase
@@ -262,5 +266,210 @@ class IncrementalUpdateTest extends TestCase
             ->save();
 
         $this->assertTrue($this->index()->isUsed('assets::img/photo.jpg'));
+    }
+
+    #[Test]
+    public function saving_a_collection_records_an_asset_added_to_its_cascade()
+    {
+        $this->makeContainer('assets', ['img/fallback.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+        $this->build();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/fallback.jpg'));
+
+        Collection::findByHandle('pages')->cascade(['seo' => ['image' => 'img/fallback.jpg']])->save();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/fallback.jpg'));
+    }
+
+    #[Test]
+    public function saving_a_collection_drops_an_asset_removed_from_its_cascade()
+    {
+        $this->makeContainer('assets', ['img/fallback.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+        Collection::findByHandle('pages')->cascade(['seo' => ['image' => 'img/fallback.jpg']])->save();
+        $this->build();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/fallback.jpg'));
+
+        Collection::findByHandle('pages')->cascade([])->save();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/fallback.jpg'));
+    }
+
+    #[Test]
+    public function deleting_a_collection_drops_the_assets_from_its_cascade()
+    {
+        $this->makeContainer('assets', ['img/fallback.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+        Collection::findByHandle('pages')->cascade(['seo' => ['image' => 'img/fallback.jpg']])->save();
+        $this->build();
+
+        Collection::findByHandle('pages')->delete();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/fallback.jpg'));
+    }
+
+    #[Test]
+    public function saving_a_taxonomy_records_an_asset_added_to_its_cascade()
+    {
+        $this->makeContainer('assets', ['img/topic.jpg']);
+        Taxonomy::make('topics')->title('Topics')->save();
+        $this->build();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/topic.jpg'));
+
+        Taxonomy::findByHandle('topics')->cascade(['seo' => ['image' => 'img/topic.jpg']])->save();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/topic.jpg'));
+    }
+
+    #[Test]
+    public function deleting_a_taxonomy_drops_the_assets_from_its_cascade()
+    {
+        $this->makeContainer('assets', ['img/topic.jpg']);
+        Taxonomy::make('topics')->title('Topics')->cascade(['seo' => ['image' => 'img/topic.jpg']])->save();
+        $this->build();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/topic.jpg'));
+
+        Taxonomy::findByHandle('topics')->delete();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/topic.jpg'));
+    }
+
+    #[Test]
+    public function saving_addon_settings_records_a_newly_placed_asset()
+    {
+        $this->makeContainer('assets', ['img/social.jpg']);
+        $this->fakeAddon('acme/seo-thing');
+        $this->build();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/social.jpg'));
+
+        Addon::get('acme/seo-thing')->settings()->set('site_defaults', ['image' => 'img/social.jpg'])->save();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/social.jpg'));
+    }
+
+    #[Test]
+    public function saving_a_blueprint_records_an_asset_added_as_a_default()
+    {
+        $this->makeContainer('assets', ['img/placeholder.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+        $this->build();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/placeholder.jpg'));
+
+        $this->makeBlueprint('collections/pages', 'pages', ['hero' => 'img/placeholder.jpg']);
+
+        $this->assertTrue($this->index()->isUsed('assets::img/placeholder.jpg'));
+    }
+
+    #[Test]
+    public function deleting_a_blueprint_drops_the_assets_it_defaulted_to()
+    {
+        $this->makeContainer('assets', ['img/placeholder.jpg']);
+        $this->makeBlueprint('collections/pages', 'pages', ['hero' => 'img/placeholder.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+        $this->build();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/placeholder.jpg'));
+
+        Blueprint::find('collections/pages.pages')->delete();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/placeholder.jpg'));
+    }
+
+    #[Test]
+    public function saving_a_fieldset_records_an_asset_added_as_a_default()
+    {
+        $this->makeContainer('assets', ['img/shared.jpg']);
+        $this->build();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/shared.jpg'));
+
+        Fieldset::make('seo')->setContents(['title' => 'Seo', 'fields' => [[
+            'handle' => 'share_image',
+            'field' => ['type' => 'assets', 'container' => 'assets', 'max_files' => 1, 'default' => 'img/shared.jpg'],
+        ]]])->save();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/shared.jpg'));
+    }
+
+    #[Test]
+    public function deleting_a_fieldset_drops_the_assets_it_defaulted_to()
+    {
+        $this->makeContainer('assets', ['img/shared.jpg']);
+
+        Fieldset::make('seo')->setContents(['title' => 'Seo', 'fields' => [[
+            'handle' => 'share_image',
+            'field' => ['type' => 'assets', 'container' => 'assets', 'max_files' => 1, 'default' => 'img/shared.jpg'],
+        ]]])->save();
+
+        $this->build();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/shared.jpg'));
+
+        Fieldset::find('seo')->delete();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/shared.jpg'));
+    }
+
+    /**
+     * Deleting a collection leaves its blueprints on disk and fires no
+     * BlueprintDeleted, so nothing else would ever drop their defaults.
+     */
+    #[Test]
+    public function deleting_a_collection_drops_the_defaults_from_its_blueprints()
+    {
+        $this->makeContainer('assets', ['img/placeholder.jpg']);
+        $this->makeBlueprint('collections/pages', 'pages', ['hero' => 'img/placeholder.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+        $this->build();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/placeholder.jpg'));
+
+        Collection::findByHandle('pages')->delete();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/placeholder.jpg'));
+    }
+
+    #[Test]
+    public function deleting_a_taxonomy_drops_the_defaults_from_its_blueprints()
+    {
+        $this->makeContainer('assets', ['img/term-default.jpg']);
+        Taxonomy::make('topics')->title('Topics')->save();
+        $this->makeBlueprint('taxonomies/topics', 'topics', ['icon' => 'img/term-default.jpg']);
+        $this->build();
+
+        $this->assertTrue($this->index()->isUsed('assets::img/term-default.jpg'));
+
+        Taxonomy::findByHandle('topics')->delete();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/term-default.jpg'));
+    }
+
+    /**
+     * A namespace ends on a whole handle, so deleting `pages` has to leave
+     * `pages-archive` where it is.
+     */
+    #[Test]
+    public function deleting_a_collection_leaves_a_similarly_named_ones_blueprints_alone()
+    {
+        $this->makeContainer('assets', ['img/placeholder.jpg', 'img/archived.jpg']);
+
+        $this->makeBlueprint('collections/pages', 'pages', ['hero' => 'img/placeholder.jpg']);
+        $this->makeEntry('home', ['title' => 'Home']);
+
+        $this->makeBlueprint('collections/pages-archive', 'pages-archive', ['hero' => 'img/archived.jpg']);
+        $this->makeEntry('old', ['title' => 'Old'], 'pages-archive');
+
+        $this->build();
+
+        Collection::findByHandle('pages')->delete();
+
+        $this->assertFalse($this->index()->isUsed('assets::img/placeholder.jpg'));
+        $this->assertTrue($this->index()->isUsed('assets::img/archived.jpg'));
     }
 }

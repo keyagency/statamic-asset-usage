@@ -2,6 +2,7 @@
 
 namespace KeyAgency\AssetUsage\Tests\Feature;
 
+use Illuminate\Support\Facades\Artisan;
 use KeyAgency\AssetUsage\Tests\TestCase;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
@@ -184,5 +185,34 @@ class CommandTest extends TestCase
         $this->build();
 
         $this->artisan('statamic:asset-usage:unused --container=documents')->assertExitCode(1);
+    }
+
+    /**
+     * "Unused" only ever means "no reference found in the content we scan", and
+     * that is worth saying right where someone is about to act on the list.
+     */
+    #[Test]
+    public function the_unused_command_says_what_it_could_not_look_at()
+    {
+        $this->makeContainer('assets', ['img/unused.jpg']);
+        (new IndexBuilder(new IndexStore))->build();
+
+        $this->assertSame(0, $this->withoutMockingConsoleOutput()->artisan('statamic:asset-usage:unused'));
+
+        // Whitespace-normalised, so console line wrapping can't break the match.
+        $output = preg_replace('/\s+/', ' ', Artisan::output());
+
+        $this->assertStringContainsString(__('asset-usage::messages.not_scanned'), $output);
+    }
+
+    #[Test]
+    public function the_unused_commands_json_output_stays_machine_readable()
+    {
+        $this->makeContainer('assets', ['img/unused.jpg']);
+        (new IndexBuilder(new IndexStore))->build();
+
+        $this->assertSame(0, $this->withoutMockingConsoleOutput()->artisan('statamic:asset-usage:unused --json'));
+
+        $this->assertSame(['assets::img/unused.jpg'], json_decode(trim(Artisan::output()), true));
     }
 }

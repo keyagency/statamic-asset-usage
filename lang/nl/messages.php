@@ -19,7 +19,9 @@ return [
     'no_results' => 'Geen assets voor deze filters.',
     'no_containers' => 'Er zijn geen asset containers ingeschakeld voor deze addon.',
 
-    'disclaimer' => 'Assets verwijderen is definitief en gebeurt op eigen risico. Zorg voor een back-up van je bestanden — de maker aanvaardt geen aansprakelijkheid voor verloren bestanden of andere schade door het gebruik van deze addon.',
+    'not_scanned' => '"Niet gebruikt" betekent dat er geen verwijzing is gevonden in de gescande content. Templates, Glide-URL\'s en data die een addon in een eigen opslag bewaart zijn hier niet zichtbaar, dus controleer die voordat je verwijdert.',
+
+    'disclaimer' => 'Assets verwijderen is definitief en gebeurt op eigen risico. Zorg voor een back-up van je bestanden. De maker aanvaardt geen aansprakelijkheid voor verloren bestanden of andere schade door het gebruik van deze addon.',
     'made_by' => 'Gemaakt door',
 
     'permissions' => [
@@ -81,6 +83,11 @@ return [
         'user' => 'Gebruiker',
         'asset' => 'Asset',
         'form_submission' => 'Formulierinzending',
+        'collection' => 'Collectie-standaardwaarden',
+        'taxonomy' => 'Taxonomie-standaardwaarden',
+        'addon_settings' => 'Addon-instellingen',
+        'blueprint' => 'Blueprint',
+        'fieldset' => 'Fieldset',
     ],
 
     'errors' => [

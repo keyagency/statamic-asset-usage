@@ -49,6 +49,23 @@ final class ItemUsageUpdater
     }
 
     /**
+     * Drop whole groups of items at once, for a deletion that takes more than
+     * the item it names with it.
+     */
+    public function forgetPrefixes(string ...$prefixes): void
+    {
+        if (! $this->store->exists() || $prefixes === []) {
+            return;
+        }
+
+        $this->store->mutate(function (UsageIndex $index) use ($prefixes) {
+            foreach ($prefixes as $prefix) {
+                $index->forgetPrefix($prefix);
+            }
+        });
+    }
+
+    /**
      * Drop the usages of assets that are gone, so a deleted asset stops showing
      * up as used somewhere.
      */

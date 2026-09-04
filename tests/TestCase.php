@@ -6,11 +6,17 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use KeyAgency\AssetUsage\ServiceProvider;
 use KeyAgency\AssetUsage\Support\Defaults;
+use Statamic\Addons\AddonRepository;
+use Statamic\Addons\Manifest;
+use Statamic\Facades\Addon;
 use Statamic\Facades\AssetContainer;
+use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
+use Statamic\Facades\YAML;
+use Statamic\Support\Str;
 use Statamic\Testing\AddonTestCase;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 
@@ -27,6 +33,16 @@ abstract class TestCase extends AddonTestCase
         Defaults::reset();
 
         File::deleteDirectory(storage_path('statamic/asset-usage'));
+
+        /*
+         * Blueprints, fieldsets and addon settings are written to disk, so
+         * without this one test's would leak into the next.
+         */
+        foreach (['addons', 'blueprints', 'fieldsets'] as $directory) {
+            File::deleteDirectory(resource_path($directory));
+        }
+
+        File::delete(config_path('statamic/asset-usage.php'));
     }
 
     protected function getEnvironmentSetUp($app)
@@ -56,7 +72,7 @@ abstract class TestCase extends AddonTestCase
 
     /**
      * Register an asset so it has meta/data of its own. Not needed just to be
-     * found by the scanner — the file listing is enough for that.
+     * found by the scanner, because the file listing is enough for that.
      */
     protected function makeAsset(string $container, string $path, array $data = [])
     {
@@ -79,6 +95,64 @@ abstract class TestCase extends AddonTestCase
         }
 
         return tap($entry)->save();
+    }
+
+    /**
+     * Register an addon with saved settings. Written to
+     * `resources/addons/{slug}.yaml` directly rather than through `save()`,
+     * which needs a booted addon.
+     *
+     * @param  string  $id  vendor/package; the slug is the package half, as it
+     *                      is for every addon that doesn't override it
+     */
+    protected function fakeAddon(string $id, array $settings = []): void
+    {
+        $slug = Str::after($id, '/');
+
+        $manifest = app(Manifest::class);
+        $manifest->manifest = array_merge($manifest->addons()->all(), [
+            $id => [
+                'id' => $id,
+                'slug' => $slug,
+                'version' => '1.0.0',
+                'namespace' => Str::studly(Str::before($id, '/')).'\\'.Str::studly($slug),
+                'autoload' => 'src/',
+                'provider' => ServiceProvider::class,
+            ],
+        ]);
+
+        // The repository memoises the addon list, so it has to be rebuilt.
+        app()->forgetInstance(AddonRepository::class);
+        app()->instance(AddonRepository::class, new AddonRepository);
+        Addon::clearResolvedInstances();
+
+        File::ensureDirectoryExists(resource_path('addons'));
+        File::put(resource_path("addons/{$slug}.yaml"), YAML::dump($settings));
+    }
+
+    /**
+     * A blueprint whose fields are assets fields with a `default`.
+     *
+     * @param  array<string, string>  $defaults  field handle => default path
+     */
+    protected function makeBlueprint(?string $namespace, string $handle, array $defaults): void
+    {
+        $fields = [];
+
+        foreach ($defaults as $field => $default) {
+            $fields[] = [
+                'handle' => $field,
+                'field' => ['type' => 'assets', 'container' => 'assets', 'max_files' => 1, 'default' => $default],
+            ];
+        }
+
+        $blueprint = Blueprint::make($handle)->setContents(['tabs' => ['main' => ['fields' => $fields]]]);
+
+        if ($namespace) {
+            $blueprint->setNamespace($namespace);
+        }
+
+        $blueprint->save();
     }
 
     protected function setSites(array $sites): void

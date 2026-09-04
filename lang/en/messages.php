@@ -19,7 +19,9 @@ return [
     'no_results' => 'No assets match these filters.',
     'no_containers' => 'No asset containers are enabled for this addon.',
 
-    'disclaimer' => 'Deleting assets is permanent and happens at your own risk. Keep a backup of your files — the author accepts no liability for lost files or any other damage arising from the use of this addon.',
+    'not_scanned' => '"Unused" means no reference was found in the content that gets scanned. Templates, Glide URLs and data an addon keeps in its own store are not visible here, so check those before deleting.',
+
+    'disclaimer' => 'Deleting assets is permanent and happens at your own risk. Keep a backup of your files. The author accepts no liability for lost files or any other damage arising from the use of this addon.',
     'made_by' => 'Made by',
 
     'permissions' => [
@@ -81,6 +83,11 @@ return [
         'user' => 'User',
         'asset' => 'Asset',
         'form_submission' => 'Form submission',
+        'collection' => 'Collection defaults',
+        'taxonomy' => 'Taxonomy defaults',
+        'addon_settings' => 'Addon settings',
+        'blueprint' => 'Blueprint',
+        'fieldset' => 'Fieldset',
     ],
 
     'errors' => [

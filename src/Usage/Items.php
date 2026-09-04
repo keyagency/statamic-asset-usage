@@ -5,7 +5,11 @@ namespace KeyAgency\AssetUsage\Usage;
 use Generator;
 use KeyAgency\AssetUsage\Support\Defaults;
 use KeyAgency\AssetUsage\Support\Settings;
+use Statamic\Facades\Addon;
+use Statamic\Facades\AssetContainer;
+use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Fieldset;
 use Statamic\Facades\Form;
 use Statamic\Facades\FormSubmission;
 use Statamic\Facades\GlobalSet;
@@ -13,6 +17,8 @@ use Statamic\Facades\Nav;
 use Statamic\Facades\Taxonomy;
 use Statamic\Facades\Term;
 use Statamic\Facades\User;
+use Statamic\Support\Str;
+use Throwable;
 
 /**
  * Turns Statamic content into `Item`s to scan. Everything goes through the
@@ -27,7 +33,7 @@ final class Items
      */
     private const STRIPPED_USER_KEYS = ['password', 'password_hash', 'remember_token'];
 
-    public const TYPES = ['entry', 'entry_draft', 'global', 'term', 'nav', 'user', 'asset', 'form_submission'];
+    public const TYPES = ['entry', 'entry_draft', 'global', 'term', 'nav', 'user', 'asset', 'form_submission', 'collection', 'taxonomy', 'addon_settings', 'blueprint', 'fieldset'];
 
     public function __construct(private readonly Containers $containers) {}
 
@@ -43,6 +49,11 @@ final class Items
         yield from $this->users();
         yield from $this->assets();
         yield from $this->formSubmissions();
+        yield from $this->collections();
+        yield from $this->taxonomies();
+        yield from $this->addonSettings();
+        yield from $this->blueprints();
+        yield from $this->fieldsets();
     }
 
     /**
@@ -285,9 +296,246 @@ final class Items
             type: 'form_submission',
             key: "{$form->handle()}::{$submission->id()}",
             site: null,
-            title: "{$form->title()} — {$submission->id()}",
+            title: "{$form->title()}: {$submission->id()}",
             editUrl: null,
             data: $submission->data()->all(),
+        );
+    }
+
+    /**
+     * A collection's cascade holds the values that fall through to every entry
+     * in it, so an asset set there is used by the whole collection without
+     * appearing on a single entry.
+     *
+     * @return Generator<Item>
+     */
+    public function collections(): Generator
+    {
+        if (! Settings::scans('collection_cascades')) {
+            return;
+        }
+
+        foreach (Collection::all() as $collection) {
+            yield self::fromCollection($collection);
+        }
+    }
+
+    public static function fromCollection($collection): Item
+    {
+        return new Item(
+            type: 'collection',
+            key: $collection->handle(),
+            site: null,
+            title: $collection->title(),
+            editUrl: $collection->editUrl(),
+            data: $collection->cascade()->all(),
+        );
+    }
+
+    /**
+     * A taxonomy's cascade is the term-level counterpart of a collection's.
+     *
+     * @return Generator<Item>
+     */
+    public function taxonomies(): Generator
+    {
+        if (! Settings::scans('taxonomy_cascades')) {
+            return;
+        }
+
+        foreach (Taxonomy::all() as $taxonomy) {
+            yield self::fromTaxonomy($taxonomy);
+        }
+    }
+
+    public static function fromTaxonomy($taxonomy): Item
+    {
+        return new Item(
+            type: 'taxonomy',
+            key: $taxonomy->handle(),
+            site: null,
+            title: $taxonomy->title(),
+            editUrl: $taxonomy->editUrl(),
+            data: $taxonomy->cascade()->all(),
+        );
+    }
+
+    /**
+     * Addon settings, stored in `resources/addons/{slug}.yaml`. Read through
+     * the addon API rather than per addon, so any addon keeping an asset in
+     * its settings is covered without knowing anything about it.
+     *
+     * @return Generator<Item>
+     */
+    public function addonSettings(): Generator
+    {
+        if (! Settings::scans('addon_settings')) {
+            return;
+        }
+
+        foreach (Addon::all() as $addon) {
+            /*
+             * Statamic saves addon settings under the addon's slug but reads
+             * them back under its package name, so an addon that overrides its
+             * slug can have a settings file it cannot resolve. One addon in
+             * that state shouldn't take the whole scan down with it.
+             */
+            try {
+                $settings = $addon->settings()->raw();
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($settings) {
+                yield self::fromAddonSettings($addon, $settings);
+            }
+        }
+    }
+
+    /**
+     * The raw settings rather than the resolved ones: an Antlers expression in
+     * a setting is content, and what it renders to on this request is not the
+     * reference the site stores.
+     */
+    public static function fromAddonSettings($addon, array $settings): Item
+    {
+        return new Item(
+            type: 'addon_settings',
+            key: $addon->id(),
+            site: null,
+            title: $addon->name(),
+            editUrl: $addon->settingsUrl(),
+            data: $settings,
+        );
+    }
+
+    /**
+     * Blueprints, for the `default` values their fields hold. Reached through
+     * the things that own a blueprint rather than by listing files, so an
+     * addon-registered namespace is covered as long as its owner is.
+     *
+     * @return Generator<Item>
+     */
+    public function blueprints(): Generator
+    {
+        if (! Settings::scans('blueprints')) {
+            return;
+        }
+
+        foreach (Collection::all() as $collection) {
+            foreach ($collection->entryBlueprints() as $blueprint) {
+                yield self::fromBlueprint($blueprint);
+            }
+        }
+
+        foreach (Taxonomy::all() as $taxonomy) {
+            foreach ($taxonomy->termBlueprints() as $blueprint) {
+                yield self::fromBlueprint($blueprint);
+            }
+        }
+
+        /*
+         * Concatenated rather than spread: these repositories key their results
+         * by handle, and a global set and a navigation can share one.
+         */
+        $owners = collect()
+            ->concat(GlobalSet::all())
+            ->concat(Nav::all())
+            ->concat(Form::all())
+            ->concat(AssetContainer::all());
+
+        /*
+         * A blueprint is null when nothing has ever been saved for its owner,
+         * which is the normal state for a site that never customised it.
+         */
+        foreach ($owners as $owner) {
+            if ($blueprint = $owner->blueprint()) {
+                yield self::fromBlueprint($blueprint);
+            }
+        }
+
+        if ($blueprint = User::blueprint()) {
+            yield self::fromBlueprint($blueprint);
+        }
+    }
+
+    public static function fromBlueprint($blueprint): Item
+    {
+        return new Item(
+            type: 'blueprint',
+            key: self::blueprintKey($blueprint),
+            site: null,
+            title: $blueprint->title(),
+            editUrl: self::blueprintEditUrl($blueprint),
+            data: BlueprintDefaults::in($blueprint->contents()),
+        );
+    }
+
+    public static function blueprintKey($blueprint): string
+    {
+        return trim(str_replace('/', '.', (string) $blueprint->namespace()).'.'.$blueprint->handle(), '.');
+    }
+
+    /**
+     * The item key every blueprint in one namespace starts with. The trailing
+     * dot is what keeps `collections/pages` from also matching the blueprints
+     * of `collections/pages-archive`.
+     */
+    public static function blueprintKeyPrefix(string $namespace): string
+    {
+        return Usage::makeItemKeyPrefix('blueprint', str_replace('/', '.', $namespace).'.');
+    }
+
+    /**
+     * Where a blueprint is edited is decided by whatever owns it, and a saved
+     * blueprint doesn't know its owner. Derived from the namespace instead, so
+     * a full scan and an incremental update produce the same link.
+     */
+    private static function blueprintEditUrl($blueprint): ?string
+    {
+        // Namespaces reach us dotted from some repositories and slashed from others.
+        $namespace = str_replace('/', '.', (string) $blueprint->namespace());
+        $handle = $blueprint->handle();
+
+        return match (true) {
+            $namespace === '' && $handle === 'user' => cp_route('blueprints.users.edit'),
+            str_starts_with($namespace, 'collections.') => Collection::findByHandle(Str::after($namespace, '.'))?->editBlueprintUrl($blueprint),
+            str_starts_with($namespace, 'taxonomies.') => Taxonomy::findByHandle(Str::after($namespace, '.'))?->editBlueprintUrl($blueprint),
+            $namespace === 'globals' => GlobalSet::findByHandle($handle)?->editBlueprintUrl(),
+            $namespace === 'navigation' => Nav::findByHandle($handle)?->editBlueprintUrl(),
+            $namespace === 'forms' => Form::find($handle)?->editBlueprintUrl(),
+            $namespace === 'assets' => AssetContainer::findByHandle($handle)?->editBlueprintUrl(),
+            default => null,
+        };
+    }
+
+    /**
+     * Fieldsets are scanned in their own right rather than through the
+     * blueprints that import them, so a default in one is found even while no
+     * blueprint uses it yet.
+     *
+     * @return Generator<Item>
+     */
+    public function fieldsets(): Generator
+    {
+        if (! Settings::scans('blueprints')) {
+            return;
+        }
+
+        foreach (Fieldset::all() as $fieldset) {
+            yield self::fromFieldset($fieldset);
+        }
+    }
+
+    public static function fromFieldset($fieldset): Item
+    {
+        return new Item(
+            type: 'fieldset',
+            key: $fieldset->handle(),
+            site: null,
+            title: $fieldset->title(),
+            editUrl: $fieldset->editUrl(),
+            data: BlueprintDefaults::in($fieldset->contents()),
         );
     }
 }

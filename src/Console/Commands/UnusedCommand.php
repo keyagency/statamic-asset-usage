@@ -76,6 +76,7 @@ class UnusedCommand extends Command
         );
 
         $this->components->info(sprintf('%d unused %s.', count($assets), Str::plural('asset', count($assets))));
+        $this->components->warn(__('asset-usage::messages.not_scanned'));
 
         if (! $this->option('delete')) {
             return self::SUCCESS;

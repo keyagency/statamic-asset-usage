@@ -14,7 +14,7 @@ use Statamic\Fields\Fieldtype;
  * `FolderAsset::values()`.
  *
  * The field is injected with `visibility: computed`, which is what keeps it out
- * of the saved data — `Fields::values()` drops computed fields unless
+ * of the saved data, because `Fields::values()` drops computed fields unless
  * `withComputedValues()` was called, and the asset update path never does. Don't
  * change that visibility without re-checking `AssetsController::update()`.
  */
