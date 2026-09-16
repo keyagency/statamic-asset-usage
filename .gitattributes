@@ -1,0 +1,13 @@
+# Keep development-only files out of the Composer package customers download.
+/.agents            export-ignore
+/.github            export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/tests              export-ignore
+/AGENTS.md          export-ignore
+/CONTRIBUTING.md    export-ignore
+/package-lock.json  export-ignore
+/package.json       export-ignore
+/phpunit.xml        export-ignore
+/pint.json          export-ignore
+/vite.config.js     export-ignore

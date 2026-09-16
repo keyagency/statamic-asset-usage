@@ -434,6 +434,47 @@ class ToolsPageTest extends TestCase
     }
 
     #[Test]
+    public function it_only_covers_containers_whose_assets_the_user_may_view()
+    {
+        $this->makeContainer('assets', ['img/unused.jpg']);
+        $this->makeContainer('documents', ['docs/orphan.pdf'], '/documents');
+        $this->build();
+
+        $user = $this->userWith([
+            'access cp',
+            ServiceProvider::PERMISSION_VIEW,
+            ServiceProvider::PERMISSION_DELETE,
+            'view assets assets',
+            'delete assets assets',
+        ]);
+
+        $this->actingAs($user)
+            ->get(cp_route('asset-usage.index'))
+            ->assertInertia(fn ($page) => $page
+                ->has('containers', 1)
+                ->where('containers.0.handle', 'assets'));
+
+        $response = $this->actingAs($user)
+            ->getJson(cp_route('asset-usage.assets'))
+            ->assertOk();
+
+        $this->assertSame(['assets::img/unused.jpg'], collect($response->json('data'))->pluck('id')->all());
+        $this->assertSame(1, $response->json('meta.unused_total'));
+
+        $this->actingAs($user)
+            ->getJson(cp_route('asset-usage.assets').'?container=documents')
+            ->assertJsonPath('meta.total', 0);
+
+        $this->actingAs($user)
+            ->deleteJson(cp_route('asset-usage.destroy-unused'))
+            ->assertOk()
+            ->assertJsonPath('deleted', 1)
+            ->assertJsonPath('errors', []);
+
+        $this->assertNotNull(Asset::find('documents::docs/orphan.pdf'));
+    }
+
+    #[Test]
     public function it_needs_at_least_one_id_to_delete()
     {
         $this->makeContainer('assets', ['img/unused.jpg']);

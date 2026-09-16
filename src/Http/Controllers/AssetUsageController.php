@@ -51,6 +51,8 @@ class AssetUsageController extends CpController
             'destroyUrl' => cp_route('asset-usage.destroy'),
             'destroyUnusedUrl' => cp_route('asset-usage.destroy-unused'),
             'containers' => Containers::enabled()
+                ->filter(fn ($container) => $this->userCanView($container))
+                ->values()
                 ->map(fn ($container) => ['handle' => $container->handle(), 'title' => $container->title()])
                 ->all(),
             'sites' => Site::all()
@@ -275,10 +277,15 @@ class AssetUsageController extends CpController
         $site = $request->input('site');
         $search = Str::lower(trim((string) $request->input('search')));
 
-        $ids = array_filter($containers->assetIds(), function (string $id) use ($container, $usage, $site, $search, $index) {
+        $viewable = $containers->all()
+            ->filter(fn ($container) => $this->userCanView($container))
+            ->map->handle()
+            ->all();
+
+        $ids = array_filter($containers->assetIds(), function (string $id) use ($container, $usage, $site, $search, $index, $viewable) {
             $reference = Reference::parse($id);
 
-            if (! $reference) {
+            if (! $reference || ! in_array($reference->container, $viewable, true)) {
                 return false;
             }
 
@@ -422,9 +429,15 @@ class AssetUsageController extends CpController
     }
 
     /**
-     * The addon's permission is not a licence to bypass Statamic's own asset
-     * permissions, which are per container.
+     * The addon's permissions are not a licence to bypass Statamic's own asset
+     * permissions, which are per container. The overview only covers containers
+     * whose assets the user may see in the asset browser too.
      */
+    private function userCanView($container): bool
+    {
+        return User::current()?->can('view', $container) ?? false;
+    }
+
     private function userCanDelete($asset): bool
     {
         return User::current()?->can('delete', $asset) ?? false;

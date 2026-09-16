@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.1.2 (2026-09-16)
+
+### What's fixed
+- **The Tools page respects the asset permissions per container.** A user with "View asset usage" saw every container's files and where they were used, including containers whose assets they aren't allowed to view. The overview, its container filter and "delete all unused" now only cover containers the user can view in the asset browser.
+
+### What's improved
+- The Composer package no longer ships tests, CI workflows and build tooling, cutting the download from roughly 120 KB to 70 KB
+
 ## 1.1.1 (2026-09-04)
 
 ### What's new

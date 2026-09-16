@@ -1,5 +1,9 @@
 # Asset Usage
 
+[![Statamic Marketplace](https://img.shields.io/badge/Statamic-Marketplace-orange.svg)](https://statamic.com/addons/key-agency/asset-usage)
+[![Latest Version](https://img.shields.io/github/v/release/keyagency/statamic-asset-usage?label=version&color=blue)](https://github.com/keyagency/statamic-asset-usage/releases)
+[![Tests](https://github.com/keyagency/statamic-asset-usage/actions/workflows/tests.yml/badge.svg)](https://github.com/keyagency/statamic-asset-usage/actions/workflows/tests.yml)
+
 > See where every asset is used, and find the ones that aren't used at all.
 
 A Statamic 6 Control Panel addon for cleaning up your asset containers. It shows you where an asset is used, so you can delete the files nothing needs without guessing.
@@ -174,7 +178,11 @@ return [
 - **View asset usage**: the Tools page.
 - **Delete unused assets**: the delete buttons and the destroy endpoint.
 
-The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage.
+The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools page does the same: it only lists containers whose assets the user may view, and deleting also needs Statamic's own delete permission for that container.
+
+## Support
+
+Found a bug or missing a feature? [Open an issue on GitHub](https://github.com/keyagency/statamic-asset-usage/issues). [CONTRIBUTING.md](CONTRIBUTING.md) lists what to include, such as your Statamic and PHP versions, whether the site uses the Eloquent driver, and the output of `php please asset-usage:doctor`.
 
 ## License
 
