@@ -176,7 +176,7 @@ return [
 ## Permissions
 
 - **View asset usage**: the Tools page.
-- **Delete unused assets**: the delete buttons and the destroy endpoint.
+- **Delete unused assets**: the delete buttons on the Tools page and the endpoints behind them.
 
 The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools page does the same: it only lists containers whose assets the user may view, and deleting also needs Statamic's own delete permission for that container.
 

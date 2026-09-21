@@ -53,7 +53,6 @@ return [
         'used' => 'Used',
         'unused' => 'Unused',
         'container' => 'Container',
-        'site' => 'Site',
         'all_sites' => 'All sites',
         'search_placeholder' => 'Search by path…',
     ],

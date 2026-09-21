@@ -1,5 +1,10 @@
 # Release Notes
 
+## Unreleased
+
+### What's improved
+- Removed code nothing used anymore: the `Items::TYPES` constant and the `filters.site` translation key.
+
 ## 1.1.2 (2026-09-16)
 
 ### What's fixed

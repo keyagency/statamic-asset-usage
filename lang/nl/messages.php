@@ -53,7 +53,6 @@ return [
         'used' => 'Gebruikt',
         'unused' => 'Ongebruikt',
         'container' => 'Container',
-        'site' => 'Site',
         'all_sites' => 'Alle sites',
         'search_placeholder' => 'Zoek op pad…',
     ],

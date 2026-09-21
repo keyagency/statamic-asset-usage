@@ -33,8 +33,6 @@ final class Items
      */
     private const STRIPPED_USER_KEYS = ['password', 'password_hash', 'remember_token'];
 
-    public const TYPES = ['entry', 'entry_draft', 'global', 'term', 'nav', 'user', 'asset', 'form_submission', 'collection', 'taxonomy', 'addon_settings', 'blueprint', 'fieldset'];
-
     public function __construct(private readonly Containers $containers) {}
 
     /**

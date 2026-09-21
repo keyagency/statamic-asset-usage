@@ -61,7 +61,7 @@ Repeat both after every frontend change. Publishing copies files, it does not sy
 Two things about that command are easy to get wrong:
 
 - The tag is the addon's **slug** (`asset-usage`), while the files land in `public/vendor/`**`statamic-asset-usage`**`/`, which is the **package name**. They differ for this addon. `--tag=statamic-asset-usage` silently publishes nothing.
-- `--force` is required. Without it Composer skips files that already exist, so you keep looking at the previous build.
+- `--force` is required. Without it `vendor:publish` skips files that already exist, so you keep looking at the previous build.
 
 Published builds are hashed and accumulate, so old `cp-*.js` and `cp-*.css` files stay behind. Harmless, but `public/vendor/statamic-asset-usage/build/assets` can be emptied and republished whenever it gets noisy.
 
