@@ -10,7 +10,6 @@ return [
     'field_label' => 'Veld',
     'all_sites' => 'Alle sites',
 
-    /** De kolom toont een vinkje of kruisje, dus die leest als een ja/nee-vraag. */
     'column_label' => 'Gebruikt',
 
     'unused' => 'Nergens gebruikt',
@@ -30,7 +29,6 @@ return [
         'delete' => 'Ongebruikte assets verwijderen',
     ],
 
-    /** Alles over de staat van de gebruiksgegevens, in gewone taal. */
     'index' => [
         'refresh' => 'Gebruik opnieuw controleren',
         'refreshing' => 'Bezig met controleren…',
@@ -60,6 +58,8 @@ return [
     'sort' => [
         'name_asc' => 'Naam (A-Z)',
         'name_desc' => 'Naam (Z-A)',
+        'newest' => 'Nieuwste eerst',
+        'oldest' => 'Oudste eerst',
         'used' => 'Meest gebruikt eerst',
         'unused' => 'Ongebruikt eerst',
     ],

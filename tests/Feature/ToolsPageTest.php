@@ -3,6 +3,7 @@
 namespace KeyAgency\AssetUsage\Tests\Feature;
 
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use KeyAgency\AssetUsage\Jobs\BuildIndex;
 use KeyAgency\AssetUsage\ServiceProvider;
 use KeyAgency\AssetUsage\Tests\TestCase;
@@ -19,6 +20,15 @@ class ToolsPageTest extends TestCase
     private function build(): void
     {
         (new IndexBuilder(new IndexStore))->build();
+    }
+
+    /**
+     * Saving a user builds the index on a fresh install, so it is dropped again
+     * for the tests about the state before the first build.
+     */
+    private function superUserWithoutIndex()
+    {
+        return tap($this->superUser(), fn () => (new IndexStore)->delete());
     }
 
     private function userWith(array $permissions)
@@ -118,6 +128,35 @@ class ToolsPageTest extends TestCase
     }
 
     #[Test]
+    public function it_sorts_the_overview_by_date()
+    {
+        $this->makeContainer('assets', ['img/old.jpg', 'img/new.jpg', 'img/middle.jpg', 'img/also-middle.jpg']);
+
+        $this->makeContainer('documents', ['docs/recent.pdf'], '/documents');
+
+        $ages = ['img/old.jpg' => 30, 'img/new.jpg' => 1, 'img/middle.jpg' => 10, 'img/also-middle.jpg' => 10];
+        $timestamp = fn (int $days) => now()->startOfDay()->subDays($days)->timestamp;
+
+        foreach ($ages as $path => $days) {
+            touch(Storage::disk('assets')->path($path), $timestamp($days));
+        }
+
+        touch(Storage::disk('documents')->path('docs/recent.pdf'), $timestamp(5));
+
+        $this->build();
+
+        $paths = fn (array $query) => collect(
+            $this->actingAs($this->superUser())
+                ->getJson(cp_route('asset-usage.assets').'?'.http_build_query($query))
+                ->json('data')
+        )->pluck('path')->all();
+
+        // Dates are compared across containers, and a tie keeps name order.
+        $this->assertSame(['img/new.jpg', 'docs/recent.pdf', 'img/also-middle.jpg', 'img/middle.jpg', 'img/old.jpg'], $paths(['sort' => 'newest']));
+        $this->assertSame(['img/old.jpg', 'img/also-middle.jpg', 'img/middle.jpg', 'docs/recent.pdf', 'img/new.jpg'], $paths(['sort' => 'oldest']));
+    }
+
+    #[Test]
     public function it_lists_assets_from_subfolders()
     {
         $this->makeContainer('assets', ['top.jpg', 'img/one/deep/nested.jpg']);
@@ -140,7 +179,7 @@ class ToolsPageTest extends TestCase
     {
         $this->makeContainer('assets', ['img/photo.jpg']);
 
-        $state = $this->actingAs($this->superUser())
+        $state = $this->actingAs($this->superUserWithoutIndex())
             ->getJson(cp_route('asset-usage.status'))
             ->assertOk()
             ->json('index');
@@ -317,7 +356,7 @@ class ToolsPageTest extends TestCase
     {
         $this->makeContainer('assets', ['img/photo.jpg']);
 
-        $this->actingAs($this->superUser())
+        $this->actingAs($this->superUserWithoutIndex())
             ->getJson(cp_route('asset-usage.assets'))
             ->assertOk()
             ->assertJsonPath('data.0.blocker', __('asset-usage::messages.errors.no_usage_data'))
@@ -348,7 +387,7 @@ class ToolsPageTest extends TestCase
     {
         $this->makeContainer('assets', ['img/unused.jpg']);
 
-        $this->actingAs($this->superUser())
+        $this->actingAs($this->superUserWithoutIndex())
             ->deleteJson(cp_route('asset-usage.destroy-unused'))
             ->assertStatus(409);
 
@@ -385,7 +424,7 @@ class ToolsPageTest extends TestCase
     {
         $this->makeContainer('assets', ['img/unused.jpg']);
 
-        $this->actingAs($this->superUser())
+        $this->actingAs($this->superUserWithoutIndex())
             ->deleteJson(cp_route('asset-usage.destroy'), ['ids' => ['assets::img/unused.jpg']])
             ->assertStatus(409);
 

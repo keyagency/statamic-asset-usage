@@ -90,6 +90,8 @@ export default {
             return [
                 { value: 'name_asc', label: __('asset-usage::messages.sort.name_asc') },
                 { value: 'name_desc', label: __('asset-usage::messages.sort.name_desc') },
+                { value: 'newest', label: __('asset-usage::messages.sort.newest') },
+                { value: 'oldest', label: __('asset-usage::messages.sort.oldest') },
                 { value: 'used', label: __('asset-usage::messages.sort.used') },
                 { value: 'unused', label: __('asset-usage::messages.sort.unused') },
             ]
@@ -567,8 +569,14 @@ export default {
                             <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400" v-text="asset.last_modified" />
                         </div>
 
+                        <!-- Without a current index a count of 0 means "not checked", not "unused". -->
                         <Badge
-                            v-if="asset.count === 0"
+                            v-if="index.stale"
+                            class="shrink-0"
+                            :text="__('asset-usage::messages.index.not_ready')"
+                        />
+                        <Badge
+                            v-else-if="asset.count === 0"
                             class="shrink-0"
                             color="orange"
                             :text="__('asset-usage::messages.filters.unused')"
@@ -580,7 +588,7 @@ export default {
                         />
 
                         <Button
-                            v-if="asset.count"
+                            v-if="!index.stale && asset.count"
                             size="sm"
                             variant="ghost"
                             class="shrink-0"
@@ -658,6 +666,13 @@ export default {
                     target="_blank"
                     rel="noopener"
                 >GitHub</a>
+                <span class="mx-1" aria-hidden="true">·</span>
+                <a
+                    class="text-blue-600 hover:underline dark:text-blue-400"
+                    href="https://statamic.com/addons/key-agency/asset-usage"
+                    target="_blank"
+                    rel="noopener"
+                >Statamic Marketplace</a>
             </p>
         </div>
         </template>

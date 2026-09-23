@@ -1,5 +1,18 @@
 # Release Notes
 
+## 1.2.0 (2026-09-23)
+
+### What's new
+- Sort the Tools page by date: newest first or oldest first.
+- German, French, Spanish and Italian translations.
+
+### What's fixed
+- The first content save on a fresh install builds the usage data, instead of being ignored until it was built by hand.
+- The Tools page no longer shows assets as unused before the usage data has been built.
+
+### What's improved
+- Faster asset browser and Tools page on sites with many assets.
+
 ## 1.1.3 (2026-09-23)
 
 ### What's fixed

@@ -111,6 +111,54 @@ class UsageFilterTest extends TestCase
         $this->assertSame([], $this->paths('unused'));
     }
 
+    /**
+     * The eloquent driver binds one parameter per path, and databases cap how
+     * many a query may have, so the filter sends whichever list is shorter.
+     */
+    #[Test]
+    public function it_constrains_the_query_with_the_shorter_list()
+    {
+        $this->makeContainer('assets', ['img/used.jpg', 'img/a.jpg', 'img/b.jpg', 'img/c.jpg']);
+        $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/used.jpg']);
+        $this->build();
+
+        $unused = $this->constraint('unused');
+
+        $this->assertSame('NotIn', $unused['type']);
+        $this->assertSame(['img/used.jpg'], $unused['values']);
+        $this->assertSame(['img/a.jpg', 'img/b.jpg', 'img/c.jpg'], $this->paths('unused'));
+
+        $used = $this->constraint('used');
+
+        $this->assertSame('In', $used['type']);
+        $this->assertSame(['img/used.jpg'], $used['values']);
+        $this->assertSame(['img/used.jpg'], $this->paths('used'));
+    }
+
+    #[Test]
+    public function it_leaves_every_asset_in_when_nothing_is_used()
+    {
+        $this->makeContainer('assets', ['img/a.jpg', 'img/b.jpg']);
+        $this->build();
+
+        $this->assertSame(['img/a.jpg', 'img/b.jpg'], $this->paths('unused'));
+        $this->assertSame([], $this->paths('used'));
+    }
+
+    /** The one where clause the filter adds. */
+    private function constraint(string $usage): array
+    {
+        $query = AssetContainer::findByHandle('assets')->queryAssets();
+
+        $this->filter()->apply($query, ['usage' => $usage]);
+
+        $wheres = (fn () => $this->wheres)->call($query);
+
+        $this->assertCount(1, $wheres);
+
+        return $wheres[0];
+    }
+
     #[Test]
     public function it_only_considers_the_container_being_browsed()
     {

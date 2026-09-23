@@ -19,6 +19,8 @@ class IndexStore
 
     private const BLINK_KEY = 'asset-usage-index';
 
+    private const INDEX_BLINK_KEY = 'asset-usage-index-object';
+
     public const STATE_READY = 'ready';
 
     public const STATE_BUILDING = 'building';
@@ -54,11 +56,17 @@ class IndexStore
         });
     }
 
+    /**
+     * Built once per request as well. The asset browser asks once per row, and
+     * turning a large payload back into objects each time adds up to seconds.
+     * Callers only read it; anything that changes the index works on its own
+     * copy and writes it back, which clears this one.
+     */
     public function index(): ?UsageIndex
     {
-        return ($payload = $this->payload()) === null
+        return Blink::once(self::INDEX_BLINK_KEY, fn () => ($payload = $this->payload()) === null
             ? null
-            : UsageIndex::fromArray($payload);
+            : UsageIndex::fromArray($payload));
     }
 
     /**
@@ -160,7 +168,7 @@ class IndexStore
     public function mutate(callable $callback): void
     {
         $this->locked(function () use ($callback) {
-            Blink::forget(self::BLINK_KEY);
+            $this->forgetCached();
 
             if (! $this->exists()) {
                 return;
@@ -212,7 +220,7 @@ class IndexStore
     {
         File::delete($this->path());
 
-        Blink::forget(self::BLINK_KEY);
+        $this->forgetCached();
     }
 
     /**
@@ -228,11 +236,17 @@ class IndexStore
 
         File::move($temp, $this->path());
 
-        Blink::forget(self::BLINK_KEY);
+        $this->forgetCached();
     }
 
     private function locked(callable $callback): void
     {
         Cache::lock('asset-usage-index', 30)->block(15, $callback);
+    }
+
+    private function forgetCached(): void
+    {
+        Blink::forget(self::BLINK_KEY);
+        Blink::forget(self::INDEX_BLINK_KEY);
     }
 }

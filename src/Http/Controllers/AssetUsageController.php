@@ -15,6 +15,7 @@ use KeyAgency\AssetUsage\Usage\Reference;
 use KeyAgency\AssetUsage\Usage\Unused;
 use KeyAgency\AssetUsage\Usage\UsageIndex;
 use Statamic\Facades\Asset;
+use Statamic\Facades\AssetContainer;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
 use Statamic\Http\Controllers\CP\CpController;
@@ -27,7 +28,7 @@ class AssetUsageController extends CpController
     private const PER_PAGE = 25;
 
     /** The orders the overview can be sorted in. The first one is the default. */
-    private const SORTS = ['name_asc', 'name_desc', 'used', 'unused'];
+    private const SORTS = ['name_asc', 'name_desc', 'used', 'unused', 'newest', 'oldest'];
 
     /**
      * How many assets one "delete all unused" request will remove. A cleanup can
@@ -334,14 +335,58 @@ class AssetUsageController extends CpController
             $sort = self::SORTS[0];
         }
 
-        usort($ids, fn (string $a, string $b) => strnatcasecmp($this->pathFor($a), $this->pathFor($b)));
+        // Parsed once up front: a comparator runs n log n times.
+        $paths = array_combine($ids, array_map(fn (string $id) => $this->pathFor($id), $ids));
+
+        usort($ids, fn (string $a, string $b) => strnatcasecmp($paths[$a], $paths[$b]));
 
         return match ($sort) {
             'name_desc' => array_reverse($ids),
             'used' => $this->sortByCount($ids, $index, descending: true),
             'unused' => $this->sortByCount($ids, $index, descending: false),
+            'newest' => $this->sortByDate($ids, descending: true),
+            'oldest' => $this->sortByDate($ids, descending: false),
             default => $ids,
         };
+    }
+
+    /**
+     * Unlike the other orders this one has to hydrate the assets. The query
+     * can't sort or pluck by date on both drivers: the Stache orders
+     * `last_modified` wrongly, and the eloquent driver's pluck skips the mapping
+     * to its `meta` column. Name order stays the tie-breaker, as usort is stable.
+     *
+     * Whole containers are fetched rather than narrowed with `whereIn`, which on
+     * the eloquent driver means one bound parameter per asset and runs into the
+     * database's limit on a large container.
+     *
+     * @param  string[]  $ids
+     * @return string[]
+     */
+    private function sortByDate(array $ids, bool $descending): array
+    {
+        $wanted = array_flip($ids);
+        $timestamps = [];
+
+        $handles = array_unique(array_map(fn (string $id) => Reference::parse($id)?->container, $ids));
+
+        foreach (array_filter($handles) as $handle) {
+            if (! $container = AssetContainer::findByHandle($handle)) {
+                continue;
+            }
+
+            foreach ($container->queryAssets()->get() as $asset) {
+                if (isset($wanted[$asset->id()])) {
+                    $timestamps[$asset->id()] = $asset->lastModified()->timestamp;
+                }
+            }
+        }
+
+        usort($ids, fn (string $a, string $b) => $descending
+            ? ($timestamps[$b] ?? 0) <=> ($timestamps[$a] ?? 0)
+            : ($timestamps[$a] ?? 0) <=> ($timestamps[$b] ?? 0));
+
+        return $ids;
     }
 
     /**

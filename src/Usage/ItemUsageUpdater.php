@@ -2,13 +2,17 @@
 
 namespace KeyAgency\AssetUsage\Usage;
 
+use KeyAgency\AssetUsage\Jobs\BuildIndex;
+
 /**
  * Patches the stored index for a single item, so saving one entry doesn't mean
  * rescanning the site. Everything an item contributed before is dropped and
  * replaced by what it contributes now.
  *
- * When no index exists yet these are no-ops: there is nothing to keep in sync
- * until someone builds it.
+ * On a fresh install there is no index to patch, so the first save builds the
+ * whole thing instead. Recording only the saved item would make every other
+ * asset look unused, and so deletable. Removals are still no-ops without an
+ * index, because a build started then would find nothing they'd change.
  */
 final class ItemUsageUpdater
 {
@@ -18,7 +22,15 @@ final class ItemUsageUpdater
 
     public function update(Item ...$items): void
     {
-        if (! $this->store->exists() || $items === []) {
+        if ($items === []) {
+            return;
+        }
+
+        if (! $this->store->exists()) {
+            $this->store->markBuilding();
+
+            BuildIndex::dispatch();
+
             return;
         }
 

@@ -43,13 +43,29 @@ class AssetUsage extends Filter
             return;
         }
 
-        $paths = $this->paths($container, ($values['usage'] ?? 'unused') === 'used');
+        [$used, $unused] = $this->pathsByUsage($container);
+
+        [$wanted, $others] = ($values['usage'] ?? 'unused') === 'used'
+            ? [$used, $unused]
+            : [$unused, $used];
+
+        /*
+         * The eloquent driver binds one parameter per path and databases cap how
+         * many a query may have, so the shorter list goes into the query. Both
+         * lists come from the container's own asset query, so leaving out the
+         * others is the same as keeping the wanted ones.
+         */
+        if (count($others) < count($wanted)) {
+            $query->whereNotIn('path', $others);
+
+            return;
+        }
 
         /*
          * Statamic reads whereIn() with an empty array as no constraint, which
          * would turn "nothing matches" into "everything matches".
          */
-        $query->whereIn('path', $paths ?: ['__asset-usage-no-matches__']);
+        $query->whereIn('path', $wanted ?: ['__asset-usage-no-matches__']);
     }
 
     public function badge($values)
@@ -68,23 +84,36 @@ class AssetUsage extends Filter
     }
 
     /**
-     * @return string[]
+     * The container's paths, split into used and unused.
+     *
+     * @return array{0: string[], 1: string[]}
      */
-    private function paths(string $container, bool $used): array
+    private function pathsByUsage(string $container): array
     {
         $store = new IndexStore;
 
         if ($store->isStale()) {
-            return [];
+            return [[], []];
         }
 
         $index = $store->indexOrEmpty();
+        $used = [];
+        $unused = [];
 
-        return collect(Containers::make()->assetIds())
-            ->filter(fn (string $id) => Reference::parse($id)?->container === $container)
-            ->filter(fn (string $id) => $index->isUsed($id) === $used)
-            ->map(fn (string $id) => Reference::parse($id)->path)
-            ->values()
-            ->all();
+        foreach (Containers::make()->assetIds() as $id) {
+            $reference = Reference::parse($id);
+
+            if ($reference?->container !== $container) {
+                continue;
+            }
+
+            if ($index->isUsed($id)) {
+                $used[] = $reference->path;
+            } else {
+                $unused[] = $reference->path;
+            }
+        }
+
+        return [$used, $unused];
     }
 }

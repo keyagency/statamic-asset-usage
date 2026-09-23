@@ -46,6 +46,55 @@ class IncrementalUpdateTest extends TestCase
     }
 
     #[Test]
+    public function the_index_is_read_once_per_request_and_again_after_a_change()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $entry = $this->makeEntry('home', ['title' => 'Home']);
+        $this->build();
+
+        $first = (new IndexStore)->index();
+
+        $this->assertSame($first, (new IndexStore)->index());
+
+        $entry->set('hero', 'img/photo.jpg')->save();
+
+        $this->assertNotSame($first, (new IndexStore)->index());
+        $this->assertTrue($this->index()->isUsed('assets::img/photo.jpg'));
+
+        (new IndexStore)->delete();
+
+        $this->assertNull((new IndexStore)->index());
+    }
+
+    #[Test]
+    public function the_first_save_on_a_fresh_install_builds_the_index()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg', 'img/other.jpg']);
+
+        $this->assertFalse((new IndexStore)->exists());
+
+        $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/photo.jpg']);
+
+        $store = new IndexStore;
+
+        $this->assertTrue($store->exists());
+        $this->assertFalse($store->isStale());
+        $this->assertTrue($this->index()->isUsed('assets::img/photo.jpg'));
+        $this->assertFalse($this->index()->isUsed('assets::img/other.jpg'));
+    }
+
+    #[Test]
+    public function the_first_save_leaves_the_index_alone_when_auto_update_is_off()
+    {
+        config(['statamic.asset-usage.auto_update' => false]);
+
+        $this->makeContainer('assets', ['img/photo.jpg']);
+        $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/photo.jpg']);
+
+        $this->assertFalse((new IndexStore)->exists());
+    }
+
+    #[Test]
     public function saving_an_entry_drops_an_asset_that_was_removed()
     {
         $this->makeContainer('assets', ['img/photo.jpg']);
@@ -241,16 +290,6 @@ class IncrementalUpdateTest extends TestCase
         $entry->set('hero', 'img/photo.jpg')->save();
 
         $this->assertFalse($this->index()->isUsed('assets::img/photo.jpg'));
-    }
-
-    #[Test]
-    public function it_does_nothing_before_an_index_exists()
-    {
-        $this->makeContainer('assets', ['img/photo.jpg']);
-
-        $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/photo.jpg']);
-
-        $this->assertFalse((new IndexStore)->exists());
     }
 
     #[Test]

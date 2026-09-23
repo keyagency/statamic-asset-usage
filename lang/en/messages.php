@@ -10,7 +10,6 @@ return [
     'field_label' => 'Field',
     'all_sites' => 'All sites',
 
-    /** The browser column shows a tick or a cross, so it reads as a yes/no question. */
     'column_label' => 'Used',
 
     'unused' => 'Not used anywhere',
@@ -30,7 +29,6 @@ return [
         'delete' => 'Delete unused assets',
     ],
 
-    /** Everything about the state of the usage data, in plain language. */
     'index' => [
         'refresh' => 'Refresh usage data',
         'refreshing' => 'Refreshing…',
@@ -60,6 +58,8 @@ return [
     'sort' => [
         'name_asc' => 'Name (A-Z)',
         'name_desc' => 'Name (Z-A)',
+        'newest' => 'Newest first',
+        'oldest' => 'Oldest first',
         'used' => 'Most used first',
         'unused' => 'Unused first',
     ],

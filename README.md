@@ -11,7 +11,7 @@ A Statamic 6 Control Panel addon for cleaning up your asset containers. It shows
 - **"Used in" panel in the asset editor**: the entries, globals, terms, navs, users and form submissions that reference this asset, as links, grouped by site.
 - **A "Used" column in the asset browser**: a tick or a cross, so one glance tells you which files are orphans.
 - **A Used / Unused filter** in the browser.
-- **An overview under Tools**: filter by container, site, usage and path, sort by name or by how much an asset is used, expand any asset to see where it's used, and delete the ones nothing needs.
+- **An overview under Tools**: filter by container, site, usage and path, sort by name, date or how much an asset is used, expand any asset to see where it's used, and delete the ones nothing needs.
 - **`please` commands** for reporting and cleaning up from the CLI.
 
 ## Works on flat-file and database sites alike
@@ -25,7 +25,7 @@ composer require keyagency/statamic-asset-usage
 php please asset-usage:index
 ```
 
-The second command builds the usage index. After that the addon keeps itself up to date as you edit content.
+The second command builds the usage index from your existing content. Skip it and the first content save builds it instead. After that the addon keeps itself up to date as you edit content.
 
 ## What counts as "used"
 
@@ -76,8 +76,9 @@ Scanning a whole site per page load isn't viable, so usage lives in an index at 
 
 - built by `php please asset-usage:index`, or from the **Refresh usage data** button on the Tools page;
 - patched incrementally whenever content is saved or deleted, so it stays accurate on its own;
+- built automatically by the first content save when there is none yet (with `auto_update` on), so a fresh install doesn't depend on someone running the command first. On the `sync` queue that one save waits for the full scan;
 - marked out of date automatically when you change a setting it was built with: the enabled containers, `scanned_types`, `scan_urls` or `include_working_copies`. While it's out of date the CP says so, the browser filter hides itself, and nothing can be deleted;
-- never built implicitly while rendering a page. Before the first build the column and the panel say "not checked yet" rather than pretending everything is unused, and nothing can be deleted until there is data behind that verdict;
+- never built implicitly while rendering a page. Before the first build the column, the panel and the Tools page say "not checked yet" rather than pretending everything is unused, and nothing can be deleted until there is data behind that verdict;
 - flagged on the Tools page once it has gone a while without a full rebuild (`rebuild_reminder_days`).
 
 Which assets exist is read through the container's asset query, the same source the asset browser uses, not through the container's file listing, which on the eloquent driver reports the container root only.
@@ -179,6 +180,10 @@ return [
 - **Delete unused assets**: the delete buttons on the Tools page and the endpoints behind them.
 
 The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools page does the same: it only lists containers whose assets the user may view, and deleting also needs Statamic's own delete permission for that container.
+
+## Languages
+
+The Control Panel side is available in English, Dutch, German, French, Spanish and Italian, and follows each user's own CP language. Console output is always English, so it reads the same in a bug report.
 
 ## Support
 
