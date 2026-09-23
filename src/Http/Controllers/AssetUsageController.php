@@ -393,7 +393,7 @@ class AssetUsageController extends CpController
     private function indexState(IndexStore $store): array
     {
         $meta = $store->meta();
-        $builtAt = $meta['built_at'] ? Carbon::parse($meta['built_at'])->setTimezone(config('app.timezone')) : null;
+        $builtAt = $meta['built_at'] ? Carbon::parse($meta['built_at']) : null;
 
         return [
             'exists' => $store->exists(),
@@ -402,12 +402,8 @@ class AssetUsageController extends CpController
             'building' => $store->isBuilding(),
             /** The reminder reads differently depending on whether anything is keeping the index current. */
             'auto_update' => Settings::autoUpdates(),
+            /** Formatted in the browser, so it shows in the viewer's timezone rather than app.timezone. */
             'built_at' => $meta['built_at'],
-            /*
-             * Spelled out and localised, because isoFormat() gives translated month
-             * names, which strtotime-style formats do not.
-             */
-            'built_at_formatted' => $builtAt?->isoFormat('D MMMM YYYY, HH:mm'),
             'built_at_relative' => $builtAt?->diffForHumans(),
             'items_scanned' => $meta['items_scanned'],
         ];

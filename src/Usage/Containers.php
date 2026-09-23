@@ -126,11 +126,6 @@ final class Containers
             : null;
     }
 
-    public function has(string $container, string $path): bool
-    {
-        return isset($this->paths[$path]) && in_array($container, $this->paths[$path], true);
-    }
-
     /**
      * @return array<int, array{prefix: string, container: string}>
      */

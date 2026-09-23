@@ -1,4 +1,5 @@
 <script>
+import { DateFormatter } from '@statamic/cms'
 import { Head } from '@statamic/cms/inertia'
 import {
     Alert,
@@ -149,6 +150,14 @@ export default {
             const key = this.index.auto_update ? 'aged_instructions' : 'aged_instructions_manual'
 
             return __(`asset-usage::messages.index.${key}`, { time: this.index.built_at_relative })
+        },
+
+        /**
+         * Formatted like Statamic's own CP dates: in the browser's timezone and
+         * the user's formatting locale.
+         */
+        builtAt() {
+            return DateFormatter.format(this.index.built_at, { preset: 'datetime', month: 'long' })
         },
 
         busy() {
@@ -388,11 +397,11 @@ export default {
 
         <Header :title="__('asset-usage::messages.nav_title')" :icon="icon">
             <Text
-                v-if="ready && index.built_at_formatted"
+                v-if="ready && index.built_at"
                 size="sm"
                 variant="subtle"
                 :title="index.built_at_relative"
-                :text="__('asset-usage::messages.index.updated_at', { time: index.built_at_formatted })"
+                :text="__('asset-usage::messages.index.updated_at', { time: builtAt })"
             />
             <Button
                 variant="primary"

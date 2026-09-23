@@ -1,9 +1,12 @@
 # Release Notes
 
-## Unreleased
+## 1.1.3 (2026-09-23)
+
+### What's fixed
+- Fixed the timezone and locale formatting of "Last updated" on the Tools page.
 
 ### What's improved
-- Removed code nothing used anymore: the `Items::TYPES` constant and the `filters.site` translation key.
+- Removed unused code.
 
 ## 1.1.2 (2026-09-16)
 

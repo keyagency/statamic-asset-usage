@@ -147,12 +147,6 @@ return [
         'blueprints' => true,
     ],
 
-    // Days without a full rebuild before the Tools page suggests one. 0 turns it off.
-    'rebuild_reminder_days' => [
-        'auto_update' => 30,
-        'manual' => 7,
-    ],
-
     // Also count plain /assets/… URLs typed into text fields
     'scan_urls' => true,
 
@@ -161,6 +155,12 @@ return [
 
     // Keep the index in sync on content saves
     'auto_update' => true,
+
+    // Days without a full rebuild before the Tools page suggests one. 0 turns it off.
+    'rebuild_reminder_days' => [
+        'auto_update' => 30,
+        'manual' => 7,
+    ],
 
     'editor_panel' => true,
     'listing_column' => true,
