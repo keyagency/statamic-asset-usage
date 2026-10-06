@@ -2,10 +2,18 @@
 
 namespace KeyAgency\AssetUsage\Fieldtypes;
 
+use KeyAgency\AssetUsage\Compression\Analyzer;
+use KeyAgency\AssetUsage\Compression\Backups;
+use KeyAgency\AssetUsage\Compression\CompressionResult;
+use KeyAgency\AssetUsage\Compression\Requirements;
+use KeyAgency\AssetUsage\ServiceProvider;
+use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use Statamic\Contracts\Assets\Asset;
 use Statamic\Facades\Site;
+use Statamic\Facades\User;
 use Statamic\Fields\Fieldtype;
+use Statamic\Support\Str;
 
 /**
  * The "Used in" panel in the asset editor, and the usage column in the asset
@@ -54,6 +62,49 @@ class AssetUsage extends Fieldtype
             'siteTitles' => $this->siteTitles(),
             'multisite' => Site::hasMultiple(),
             'toolsUrl' => cp_route('asset-usage.index'),
+            'compression' => $this->compression($asset),
+        ];
+    }
+
+    /**
+     * What the editor offers under the usage: a Compress button for an image
+     * that can get smaller, or a way back to the original of one that was
+     * compressed. Only for users who may replace the file, and null when there
+     * is nothing to offer, so most assets show nothing extra.
+     */
+    private function compression(Asset $asset): ?array
+    {
+        $user = User::current();
+
+        if (! Settings::compressionEnabled()
+            || ! Analyzer::applies($asset)
+            || ! $user
+            || ! ($user->isSuper() || $user->hasPermission(ServiceProvider::PERMISSION_COMPRESS))
+            || ! $user->can('reupload', $asset)
+            || ! Requirements::available()) {
+            return null;
+        }
+
+        $record = Analyzer::make()->fresh($asset);
+        $backups = new Backups;
+        $savings = $record['savings'] ?? null;
+        $compressible = ($record['status'] ?? null) === CompressionResult::OK
+            && $savings !== null
+            && $savings >= Settings::compressionThreshold();
+
+        if (! $compressible && ! $backups->has($asset)) {
+            return null;
+        }
+
+        return [
+            'compressible' => $compressible,
+            'savings' => $savings !== null ? (int) round($savings) : null,
+            'before' => isset($record['before_bytes']) ? Str::fileSizeForHumans($record['before_bytes'], 1) : null,
+            'after' => isset($record['after_bytes']) ? Str::fileSizeForHumans($record['after_bytes'], 1) : null,
+            'has_backup' => $backups->has($asset),
+            'compressed' => $backups->summary($asset),
+            'expires_at' => $backups->expiresAt($asset)?->toIso8601String(),
+            'url' => cp_route('asset-usage.compress.show', ['asset' => $asset->id()]),
         ];
     }
 
@@ -90,6 +141,17 @@ class AssetUsage extends Fieldtype
      * On the front end the field augments to the number of usages, which is the
      * only part that makes sense outside the CP.
      */
+    /**
+     * What the Stache sorts the "Used" column on in the asset browser: the
+     * number of places the asset is used.
+     */
+    public function toQueryableValue($value)
+    {
+        $asset = $this->asset();
+
+        return $asset ? (new IndexStore)->indexOrEmpty()->countFor($asset->id()) : 0;
+    }
+
     public function augment($value)
     {
         $asset = $this->asset();
@@ -114,6 +176,7 @@ class AssetUsage extends Fieldtype
             'siteTitles' => $this->siteTitles(),
             'multisite' => Site::hasMultiple(),
             'toolsUrl' => cp_route('asset-usage.index'),
+            'compression' => null,
         ];
     }
 

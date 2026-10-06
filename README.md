@@ -6,13 +6,15 @@
 
 > See where every asset is used, and find the ones that aren't used at all.
 
-A Statamic 6 Control Panel addon for cleaning up your asset containers. It shows you where an asset is used, so you can delete the files nothing needs without guessing.
+A Statamic 6 Control Panel addon for cleaning up your asset containers. It shows you where an asset is used, so you can delete the files nothing needs without guessing, and it shrinks the images that are far heavier than they need to be.
 
-- **"Used in" panel in the asset editor**: the entries, globals, terms, navs, users and form submissions that reference this asset, as links, grouped by site.
+- **"Used in" panel in the asset editor**, in a section of its own: the entries, globals, terms, navs, users and form submissions that reference this asset, as links, grouped by site.
 - **A "Used" column in the asset browser**: a tick or a cross, so one glance tells you which files are orphans.
 - **A Used / Unused filter** in the browser.
-- **An overview under Tools**: filter by container, site, usage and path, sort by name, date or how much an asset is used, expand any asset to see where it's used, and delete the ones nothing needs.
-- **`please` commands** for reporting and cleaning up from the CLI.
+- **An overview under Tools**: filter by container, site, usage and path, sort by any column (name, size, resolution, DPI, saving, date or usage), expand any asset to see where it's used, and delete the ones nothing needs.
+- **Image compression**: images that can get smaller get a View compression button. A before and after page shows the result first, and the original is kept so it can be put back.
+- **A log** of every compression and every deleted asset, with who did it.
+- **`please` commands** for reporting, cleaning up and compressing from the CLI.
 
 ## Works on flat-file and database sites alike
 
@@ -26,6 +28,11 @@ php please asset-usage:index
 ```
 
 The second command builds the usage index from your existing content. Skip it and the first content save builds it instead. After that the addon keeps itself up to date as you edit content.
+
+For image compression two things are worth setting up, though neither is required:
+
+- [pngquant](https://pngquant.org) on the server (`brew install pngquant`, `apt install pngquant`). Without it PNGs are only resized and saved losslessly.
+- Laravel's scheduler (a cron entry running `php artisan schedule:run` every minute), which clears the kept originals once they are older than `keep_originals_days`. Without it they stay until you run `php please asset-usage:prune-originals`.
 
 ## What counts as "used"
 
@@ -64,6 +71,8 @@ An asset can also be referenced without ever being saved onto a single item, so 
 
 The column arrives through the container's blueprint, and Statamic renders blueprint columns before its own File / Size / Last Modified, and there's no hook to change that. If you'd rather have it at the end, use **Customize Columns** in the browser and drag it there; Statamic remembers the order per user.
 
+Click its heading to sort by how often an asset is used, so the unused ones come first. That works on flat-file sites; on the eloquent driver the column can't be sorted, because the database has no column to order by.
+
 The column deliberately shows only a tick or a cross. A count or a list of sites made rows wide enough to push the filename off screen; the numbers live in the editor panel and on the Tools page.
 
 ## Multisite
@@ -87,31 +96,63 @@ The incremental updates run through a queued listener (like Statamic's own refer
 
 ## Commands
 
-```bash
-# Rebuild the whole index
-php please asset-usage:index
-php please asset-usage:index --queue    # hand it to a worker
+Every command starts with `php please asset-usage:`. Options belong to the command they are listed under; `--force`, for one, means something different for `unused` than for `analyze`.
 
-# Diagnose what the addon sees per container
-php please asset-usage:doctor
-php please asset-usage:doctor --folders
+### `asset-usage:index`
 
-# Report unused assets
-php please asset-usage:unused
-php please asset-usage:unused --container=main --json
-php please asset-usage:unused --older-than=30 --ignore='*.pdf'
+Rebuilds the whole usage index.
 
-# Clean up
-php please asset-usage:unused --delete           # asks first
-php please asset-usage:unused --delete --force   # doesn't
-php please asset-usage:unused --fresh --delete   # rebuild the index first
-```
+| Option | |
+|---|---|
+| `--queue` | Hand the rebuild to a queue worker instead of running it now |
 
-`--delete` refuses to run against an out-of-date index, and re-checks every asset immediately before removing it.
+### `asset-usage:unused`
 
-`asset-usage:doctor` is for when the numbers look wrong. Per container it prints what the filesystem holds (split into root and subfolders), what the asset query finds, what Statamic's own file listing reports, how many paths resolve to an actual asset and how many are recorded as used. It also flags files that exist on disk but aren't known as assets: on the eloquent driver those have no row in the `assets` table, so nothing can report on them until `php please eloquent:import-assets` brings them in.
+Lists the assets nothing uses, and can delete them.
 
-Above the per-container output it lists the content types actually being scanned, and warns about any that your published config doesn't mention, because those are switched off, which is the usual reason a whole class of references seems to go unnoticed.
+| Option | |
+|---|---|
+| `--container=main` | Only one container |
+| `--older-than=30` | Only assets last modified more than this many days ago |
+| `--ignore='*.pdf'` | Filename patterns to leave out, on top of the `ignore` config; repeat it for more |
+| `--json` | The paths as JSON instead of a table |
+| `--fresh` | Rebuild the index first |
+| `--delete` | Delete the listed assets. Asks first, refuses to run against an out-of-date index, and re-checks every asset just before removing it |
+| `--force` | With `--delete`: don't ask for confirmation |
+
+### `asset-usage:doctor`
+
+Diagnoses what the addon sees, for when the numbers look wrong.
+
+| Option | |
+|---|---|
+| `--folders` | Also list the file count per folder |
+
+Per container it prints what the filesystem holds (split into root and subfolders), what the asset query finds, what Statamic's own file listing reports, how many paths resolve to an actual asset and how many are recorded as used. It also flags files that exist on disk but aren't known as assets: on the eloquent driver those have no row in the `assets` table, so nothing can report on them until `php please eloquent:import-assets` brings them in.
+
+Above the per-container output it lists the content types actually being scanned, and warns about any that your published config doesn't mention, because those are switched off, which is the usual reason a whole class of references seems to go unnoticed. For compression it shows the image driver Glide uses, whether pngquant is installed, `memory_limit` (with GD), when the images were last analysed and how much space the kept originals take.
+
+### `asset-usage:analyze`
+
+Test-compresses every image, for the Saving column and the Compression page.
+
+| Option | |
+|---|---|
+| `--force` | Also analyse images whose result is still current |
+| `--queue` | Hand the analysis to a queue worker instead of running it now |
+
+### `asset-usage:prune-originals`
+
+Deletes the originals of compressed images once they are older than `keep_originals_days`. Runs daily on its own when the site runs Laravel's scheduler.
+
+### `asset-usage:log`
+
+Prints the log: every compression and every deleted asset, newest first.
+
+| Option | |
+|---|---|
+| `--type=compressed` | Only compressions, or `--type=deleted` for only deletions |
+| `--json` | The totals and the entries as JSON |
 
 ## Deleting
 
@@ -121,6 +162,48 @@ Deleting is available from the Tools page (per row, for a checkbox selection, an
 - the index must be current, and there has to be one at all: before the first build nothing is known to be unused, so nothing is deletable;
 - the asset must have zero usages, so a used asset can't be deleted from here at all;
 - `ignore` patterns and `minimum_age_in_days` are enforced server-side, not just in the UI.
+
+Every deletion is logged, from here or from anywhere else (see [The log](#the-log)).
+
+## Compressing images
+
+Images that are far heavier than they need to be (photos straight from a camera, 300 DPI exports, PNGs saved without compression) can be compressed from the Tools page or the asset editor. Each image is scaled down to `max_dimension` (never enlarged), set to 72 DPI, stripped of metadata where the image library allows it, and saved again in the same format, at the same path, so every place it is used keeps working. JPG and WebP are re-encoded at the configured quality; PNGs go through [pngquant](https://pngquant.org) when the server has it, and are otherwise only resized and saved losslessly.
+
+The **Saving** column shows what each image would save. When an image gets any smaller (`threshold_percent`, 1% by default) it becomes a **View compression** button, which opens a page comparing the original and the result: on top of each other with a line you drag (or move with the arrow keys), or side by side, at fit, 100% or 200%. Nothing changes until you press **Compress** there and confirm. The same button shows up under **Compression** in the asset editor, for an image that can get smaller. Compressing keeps the original in `storage/statamic/asset-usage/originals` for `keep_originals_days`. The image then shows as **Compressed (−25%)**, measured against that original, and links back to the same page, where the original can be put back. It isn't offered again with the same settings, because saving it again would only shave off another percent while losing quality. An original only belongs to the file it was taken from: once that file is replaced or uploaded anew, the old original is no longer offered. It is deleted with its asset and moves along when the asset is renamed or moved.
+
+Under **Tools > Asset Usage**, tabs (and the submenu) lead to a **Compression** page, the same overview showing the images that can get smaller and the ones the addon compressed (with a filter for either), largest saving first, and to the **Log**: every compression the addon made, by whom, before and after, and whether the original was put back, and every deleted asset (see below). The Compression page sums it up: "12 images · 70.6 MB → 13.3 MB (−81.1%) · 5 resized". Restored compressions stay in the log but no longer count.
+
+The Overview keeps the Saving column, and a notice with a button to the Compression page when there is something to gain; everything else about compression lives on its own page.
+
+### When is it analysed?
+
+The numbers in the Saving column come from a test compression, not from a live check:
+
+- **After an upload or a replace**: new and replaced images are analysed automatically, on the queue. On the `sync` queue that happens right after the upload has been answered, so the upload doesn't wait for it.
+- **With the "Analyse compression" button** on the Compression page, or `php please asset-usage:analyze`: for the images that were there before, and after a change in the settings.
+- **After a settings change** the old results no longer count, and the Compression page asks you to analyse again.
+
+The Compression page always says when the last analysis ran.
+
+### Good to know
+
+- The memory Glide needs depends on the number of pixels only, not on the DPI or the file size. Scaling down to `max_dimension` is what helps Glide; setting 72 DPI does no harm but changes nothing for it.
+- Compression uses the image driver Glide is configured with (`statamic.assets.image_manipulation.driver`), including a custom one.
+- An image that won't fit in `memory_limit` is marked **Too large** instead of being processed. That is checked from the file's header, before the file is read. GD decodes into PHP's own memory, so it reaches that limit much sooner than Imagick, which decodes outside it.
+- GD drops embedded colour profiles. When that happens, the before and after page says so.
+- Statamic works with Intervention Image v3 and v4, and so does compression. Version 3 has no option to strip metadata, so with v3 and the Imagick driver an image keeps its EXIF data; GD drops it either way.
+- Re-saving an image that is already compressed harder than the configured quality would make it bigger. Those images get no button; the Saving column says No saving.
+- GIFs, SVGs and animated images are left alone.
+- When the PHP extension of the configured driver is missing, the Compression page says so and compression stays off; nothing else breaks. Formats the driver can't handle (GD built without WebP, say) and a missing pngquant are mentioned there as well, and by `asset-usage:doctor`.
+
+## The log
+
+**Tools > Asset Usage > Log** lists what happened to assets in the enabled containers, newest first, filtered by All, Compressed or Deleted:
+
+- **Compressions**: who, before and after, and whether the original was put back.
+- **Deletions**, wherever they happen: the Tools page, `asset-usage:unused --delete`, Statamic's own asset browser, another command or a front-end form. Each entry has who did it, the file size and dimensions, where it happened, and whether the asset was still used at that moment, which makes an accidental deletion easy to trace. The overview shows the total ("8 files deleted · 24.3 MB freed").
+
+Users only see entries for the containers they can view. The log keeps a user's name, not their email address. It is kept in `storage/statamic/asset-usage/asset-log.jsonl`, outside your content and git. `php please asset-usage:log` prints it, `--json` for scripts.
 
 ## Configuration
 
@@ -171,15 +254,30 @@ return [
 
     // Assets younger than this are never reported as unused
     'minimum_age_in_days' => 0,
+
+    'compression' => [
+        'enabled' => true,
+        'threshold_percent' => 1,    // from this saving on, an image is offered (at least 1)
+        'max_dimension' => 3840,     // longest side in pixels, never enlarged
+        'dpi' => 72,
+        'jpg_quality' => 82,
+        'webp_quality' => 80,
+        'png_quality' => '70-90',    // pngquant min-max
+        'pngquant_binary' => null,   // null: look it up in the PATH
+        'keep_originals_days' => 30, // null: keep originals forever
+    ],
 ];
 ```
 
 ## Permissions
 
-- **View asset usage**: the Tools page.
+- **View asset usage**: the Tools pages: Overview, Compression and Log.
 - **Delete unused assets**: the delete buttons on the Tools page and the endpoints behind them.
+- **Compress images**: the Analyse and Compress buttons, the before and after page, the Compression part of the asset editor and restoring an original. Replacing the file also needs Statamic's own edit and upload permissions for that container.
 
-The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools page does the same: it only lists containers whose assets the user may view, and deleting also needs Statamic's own delete permission for that container.
+The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools pages do the same: they only list containers whose assets the user may view, the log included, and deleting also needs Statamic's own delete permission for that container.
+
+The commands don't check permissions: whoever can run `php please` can use them.
 
 ## Languages
 

@@ -161,4 +161,46 @@ return [
 
     'minimum_age_in_days' => 0,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Image Compression
+    |--------------------------------------------------------------------------
+    |
+    | The Tools page can shrink images that are much heavier than they need to
+    | be. Each image is test-compressed in the background (after an upload, or
+    | with the "Analyse compression" button and `php please
+    | asset-usage:analyze`), and an image that would get at least
+    | `threshold_percent` smaller gets a Compress button. Compressing always
+    | shows a before and after first, and keeps the original for
+    | `keep_originals_days` so it can be put back.
+    |
+    | - threshold_percent: the smallest saving, in whole percents, that gets a
+    |   Compress button. 1 offers every image that gets any smaller at all.
+    |   An image that would only get bigger is never offered.
+    | - max_dimension: longest side in pixels. Larger images are scaled down,
+    |   smaller ones are never enlarged. This is what lowers the memory Glide
+    |   needs, which depends on the number of pixels only.
+    | - dpi: the resolution written into the file. Browsers ignore it.
+    | - png_quality: the min-max range passed to pngquant. Without pngquant on
+    |   the server, PNGs are only resized and saved losslessly.
+    | - pngquant_binary: path to pngquant, or null to look it up in the PATH.
+    | - keep_originals_days: null keeps originals forever.
+    |
+    | Changing any of these makes the analysed results out of date, so analyse
+    | again afterwards.
+    |
+    */
+
+    'compression' => [
+        'enabled' => true,
+        'threshold_percent' => 1,
+        'max_dimension' => 3840,
+        'dpi' => 72,
+        'jpg_quality' => 82,
+        'webp_quality' => 80,
+        'png_quality' => '70-90',
+        'pngquant_binary' => null,
+        'keep_originals_days' => 30,
+    ],
+
 ];

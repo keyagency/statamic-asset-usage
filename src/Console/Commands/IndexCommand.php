@@ -3,15 +3,15 @@
 namespace KeyAgency\AssetUsage\Console\Commands;
 
 use Illuminate\Console\Command;
+use KeyAgency\AssetUsage\Console\Commands\Concerns\BuildsIndexWithProgress;
 use KeyAgency\AssetUsage\Jobs\BuildIndex;
 use KeyAgency\AssetUsage\Usage\Containers;
-use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use Statamic\Console\RunsInPlease;
 
 class IndexCommand extends Command
 {
-    use RunsInPlease;
+    use BuildsIndexWithProgress, RunsInPlease;
 
     protected $signature = 'statamic:asset-usage:index
         {--queue : Dispatch the rebuild to the queue instead of running it now}';
@@ -44,15 +44,7 @@ class IndexCommand extends Command
             $containers->map->handle()->implode(', ')
         ));
 
-        $scanned = 0;
-
-        $index = (new IndexBuilder(new IndexStore))->build(function () use (&$scanned) {
-            $scanned++;
-
-            if ($scanned % 250 === 0) {
-                $this->line("  scanned {$scanned} items…");
-            }
-        });
+        [$index, $scanned] = $this->buildIndexWithProgress();
 
         $used = count($index->usedAssetIds());
         $total = count(Containers::make()->assetIds());

@@ -3,6 +3,7 @@
 namespace KeyAgency\AssetUsage\UpdateScripts;
 
 use Illuminate\Support\Facades\File;
+use KeyAgency\AssetUsage\UpdateScripts\Concerns\InsertsIntoConfig;
 use Statamic\UpdateScripts\UpdateScript;
 
 /**
@@ -16,6 +17,8 @@ use Statamic\UpdateScripts\UpdateScript;
  */
 class AddScannedTypesToPublishedConfig extends UpdateScript
 {
+    use InsertsIntoConfig;
+
     /**
      * The types added in this release. Deliberately a fixed list rather than
      * `Settings::SCANNABLE_TYPES`: a type that existed before could have been
@@ -100,12 +103,10 @@ class AddScannedTypesToPublishedConfig extends UpdateScript
         // Match the indentation of the entries already in there.
         $indent = str_repeat(' ', strlen($lines[$end]) - strlen(ltrim($lines[$end])) + 4);
 
-        array_splice($lines, $end, 0, array_map(
+        return $this->insertBefore($lines, $end, array_map(
             fn (string $type) => "{$indent}'{$type}' => true,",
             $missing
         ));
-
-        return implode("\n", $lines);
     }
 
     /**

@@ -232,11 +232,15 @@ class IndexStore
 
         $temp = $this->path().'.'.bin2hex(random_bytes(4));
 
-        File::put($temp, json_encode($payload));
+        // A broken character (a filename, an error message) is replaced; never write an empty file over the store.
+        File::put($temp, json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
 
         File::move($temp, $this->path());
 
         $this->forgetCached();
+
+        // The asset browser sorts the "Used" column on a cached copy of these counts.
+        SortIndex::clear();
     }
 
     private function locked(callable $callback): void

@@ -4,7 +4,9 @@ namespace KeyAgency\AssetUsage\Listeners;
 
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
+use KeyAgency\AssetUsage\Usage\SortIndex;
 use Statamic\Events\AssetContainerBlueprintFound;
+use Statamic\Http\Controllers\CP\Assets\BrowserController;
 
 /**
  * Adds the "Used in" field to every enabled container's blueprint. One field
@@ -30,7 +32,48 @@ class InjectUsageField
             return;
         }
 
-        $event->blueprint->ensureField(self::HANDLE, $this->config());
+        $blueprint = $event->blueprint;
+
+        /*
+         * In a section of its own, headed with the addon's name, so it reads as
+         * part of the addon rather than one of the container's own fields. Not
+         * without the panel, where the field only exists for the column and
+         * renders nothing, and not when a site placed the field in its
+         * blueprint itself, or this blueprint already has it: ensureField()
+         * keeps that position and merges the config.
+         */
+        if (! Settings::showsEditorPanel() || $blueprint->hasField(self::HANDLE)) {
+            $blueprint->ensureField(self::HANDLE, $this->config());
+
+            return;
+        }
+
+        $contents = $blueprint->contents();
+        $tab = array_key_first($contents['tabs'] ?? []) ?? 'main';
+
+        $contents['tabs'][$tab]['sections'][] = [
+            'display' => __('asset-usage::messages.nav_title'),
+            'fields' => [['handle' => self::HANDLE, 'field' => $this->config()]],
+        ];
+
+        $blueprint->setContents($contents);
+    }
+
+    /**
+     * Computed fields can't be sorted, so only in the asset browser's listing
+     * requests the field is read-only instead, which makes the column
+     * sortable. Saving an asset is always another request, where it stays
+     * computed and so out of the saved data.
+     */
+    private function sortsHere(): bool
+    {
+        $route = request()->route();
+
+        return Settings::showsListingColumn()
+            && SortIndex::supported()
+            && $route
+            && $route->getControllerClass() === BrowserController::class
+            && in_array($route->getActionMethod(), ['folder', 'search'], true);
     }
 
     private function config(): array
@@ -50,7 +93,8 @@ class InjectUsageField
              */
             'display' => $panel ? __('asset-usage::messages.column_label') : '',
             'hide_display' => ! $panel,
-            'visibility' => 'computed',
+            'visibility' => $this->sortsHere() ? 'read_only' : 'computed',
+            'sortable' => $this->sortsHere(),
             'listable' => Settings::showsListingColumn(),
             'panel' => $panel,
         ];

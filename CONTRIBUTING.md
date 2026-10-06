@@ -11,6 +11,7 @@ Asset Usage is a Key Agency Statamic addon. The source lives on GitHub so you ca
 - for detection problems: how the asset is referenced (asset field, Bard, Markdown, a plain URL…) and a small example of the field data
 - whether the usage index was current, which the Tools page says, and `php please asset-usage:index` rebuilds it
 - for missing or miscounted assets: the output of `php please asset-usage:doctor`
+- for compression problems: the file type and size of the image, and the output of `php please asset-usage:doctor`, which names the image driver Glide uses and whether pngquant is installed
 
 Please don't paste production content or credentials. A minimal reproduction is enough.
 
@@ -74,18 +75,21 @@ vendor/bin/pint --test
 
 Tests run against in-memory SQLite via Orchestra Testbench + `Statamic\Testing\AddonTestCase`. CI runs PHPUnit on PHP 8.2–8.5 (including a `--prefer-lowest` job) and Pint. New behaviour needs a test.
 
+A few compression tests need the Imagick extension or the `pngquant` binary and are skipped without them. `vendor/bin/phpunit` runs on whichever `php` comes first in your PATH, which may not be the one with Imagick.
+
 ## Conventions
 
 - Console output is English, always, written as literals in the command itself. It ends up in bug reports, and a diagnostic in the reporter's language is harder to read, not easier.
-- Other user-facing strings live in `lang/{locale}/messages.php` (English, Dutch, German, French, Spanish and Italian). Add keys to every locale and don't inline literals. `TranslationsTest` fails when a locale is missing a key, a plural segment or a placeholder. Related strings are grouped under their own array key (`index`, `filters`, `sort`, `delete`, `errors`, …) rather than prefixed.
+- Other user-facing strings live in `lang/{locale}/messages.php` (English, Dutch, German, French, Spanish and Italian). Add keys to every locale and don't inline literals. `TranslationsTest` fails when a locale is missing a key, a plural segment or a placeholder. Related strings are grouped under their own array key (`index`, `filters`, `columns`, `delete`, `compress`, `log`, `nav`, `errors`, …) rather than prefixed.
 - Config is read through `Support\Settings`, not scattered `config()` calls.
 
-Four rules are easy to break; please preserve them:
+Five rules are easy to break; please preserve them:
 
 1. **Content is read through Statamic's repositories, never the filesystem.** That's what makes the addon work on Eloquent-driver sites, which is its reason to exist.
-2. **The injected `asset_usage` field stays `visibility: computed`.** That is the only thing keeping it out of every asset's `.meta` file. `UsageFieldTest::updating_an_asset_never_writes_the_field_into_its_data` guards it.
+2. **The injected `asset_usage` field stays `visibility: computed`.** That is the only thing keeping it out of every asset's `.meta` file. `UsageFieldTest::updating_an_asset_never_writes_the_field_into_its_data` guards it. The one exception is the asset browser's own listing requests, where it is `read_only` so the column can be sorted; saving an asset never happens in those (`InjectUsageField::sortsHere()`).
 3. **Deletion rails live in `Usage\Unused`**, so the Control Panel and the CLI can't disagree about what may be removed. Add new guards there, not in a controller.
 4. **Which assets exist comes from `$container->queryAssets()`, not `$container->files()`.** On the Eloquent driver that file listing only reports the container root, so every asset in a folder would silently disappear. `ContainerPathsTest` guards it.
+5. **A compressed or restored file replaces the asset through `$asset->reupload()`, never by writing to the disk.** That regenerates the meta, clears Glide and fires `AssetReuploaded`, which the git integration commits. A direct write leaves Statamic's cached meta and old Glide renders behind.
 
 ## Releasing
 

@@ -1,5 +1,24 @@
 # Release Notes
 
+## 1.3.0 (2026-10-06)
+
+### What's new
+- Compress images from the Tools page or the asset editor. Images that can get smaller get a View compression button, which compares the original and the result first, with a slider or side by side. The original is kept for 30 days and can be restored.
+- The Tools page says when the image driver's PHP extension, a format or pngquant is missing on the server.
+- New `compression` settings in the config, added to a published config by the update script.
+- New permission: Compress images.
+- A Compression page with the images that can get smaller and the ones the addon compressed.
+- A log of every compression and every deleted asset, wherever it was deleted, with who did it and whether a deleted asset was still in use.
+- New commands: `asset-usage:analyze`, `asset-usage:prune-originals` and `asset-usage:log`.
+- Sort the asset browser by the "Used" column (flat-file sites).
+- In the asset editor, usage and compression sit in a section of their own, headed with the addon's name.
+- The Tools page lists assets in columns: name, size, resolution, DPI, saving, last modified and usage. Click a column heading to sort by it, and click again to reverse the order.
+- Resolution for images, and DPI for JPEG and PNG files that declare one.
+
+### What's improved
+- "Used in X places" opens the details itself, instead of a separate Details button.
+- `asset-usage:index` and `asset-usage:unused` show a progress bar.
+
 ## 1.2.0 (2026-09-23)
 
 ### What's new

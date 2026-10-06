@@ -1,9 +1,13 @@
 import AssetUsage from './pages/AssetUsage.vue'
+import Compress from './pages/Compress.vue'
+import AssetLog from './pages/AssetLog.vue'
 import AssetUsageFieldtype from './fieldtypes/AssetUsageFieldtype.vue'
 import AssetUsageIndexFieldtype from './fieldtypes/AssetUsageIndexFieldtype.vue'
 
 Statamic.booting(() => {
     Statamic.$inertia.register('asset-usage::AssetUsage', AssetUsage)
+    Statamic.$inertia.register('asset-usage::Compress', Compress)
+    Statamic.$inertia.register('asset-usage::AssetLog', AssetLog)
 
     /**
      * The panel in the asset editor and the column in the asset browser. Both

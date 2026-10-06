@@ -3,6 +3,8 @@
 namespace KeyAgency\AssetUsage\Console\Commands;
 
 use Illuminate\Console\Command;
+use KeyAgency\AssetUsage\Console\Commands\Concerns\BuildsIndexWithProgress;
+use KeyAgency\AssetUsage\Log\DeletionSource;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
@@ -11,9 +13,13 @@ use Statamic\Console\RunsInPlease;
 use Statamic\Facades\Asset;
 use Statamic\Support\Str;
 
+/**
+ * The bars go to stderr and are left out with --json, so the paths are the
+ * only output a script reads.
+ */
 class UnusedCommand extends Command
 {
-    use RunsInPlease;
+    use BuildsIndexWithProgress, RunsInPlease;
 
     protected $signature = 'statamic:asset-usage:unused
         {--container= : Only look at one asset container}
@@ -29,7 +35,7 @@ class UnusedCommand extends Command
     public function handle(): int
     {
         if ($this->option('fresh')) {
-            $this->components->task('Rebuilding the usage index', fn () => (new IndexBuilder(new IndexStore))->build());
+            $this->rebuildIndex();
         }
 
         $store = new IndexStore;
@@ -85,8 +91,22 @@ class UnusedCommand extends Command
         return $this->delete($assets, $unused);
     }
 
+    private function rebuildIndex(): void
+    {
+        if ($this->option('json')) {
+            (new IndexBuilder(new IndexStore))->build();
+
+            return;
+        }
+
+        $this->components->info('Rebuilding the usage index.');
+        $this->buildIndexWithProgress();
+        $this->newLine();
+    }
+
     /**
      * The unused assets, hydrated and filtered by the command's own options.
+     * Loading each one takes a while on a large site, hence the bar.
      *
      * @return \Statamic\Contracts\Assets\Asset[]
      */
@@ -94,10 +114,24 @@ class UnusedCommand extends Command
     {
         $olderThan = $this->option('older-than') !== null ? (int) $this->option('older-than') : null;
         $patterns = (array) $this->option('ignore');
+        $ids = $unused->ids($container);
+        $found = [];
 
-        return collect($unused->ids($container))
-            ->map(fn (string $id) => Asset::find($id))
-            ->filter()
+        $find = function (string $id) use (&$found) {
+            if ($asset = Asset::find($id)) {
+                $found[] = $asset;
+            }
+        };
+
+        if ($this->option('json') || $ids === []) {
+            array_walk($ids, $find);
+        } else {
+            $this->components->info(sprintf('Reading %d %s nothing refers to.', count($ids), Str::plural('asset', count($ids))));
+            $this->withProgressBar($ids, $find);
+            $this->newLine(2);
+        }
+
+        return collect($found)
             /*
              * The config's minimum age is a floor the command can raise but not
              * lower, so a --older-than of 0 can't override it.
@@ -122,23 +156,30 @@ class UnusedCommand extends Command
         }
 
         $deleted = 0;
+        $skipped = [];
 
-        foreach ($assets as $asset) {
+        $this->withProgressBar($assets, function ($asset) use ($unused, &$deleted, &$skipped) {
             /*
              * Re-checked right before deleting: the index could have been
              * patched by a content save while the operator was reading the list.
+             * Reported after the bar, which a warning would break up.
              */
             if ($blocker = $unused->blocker($asset, 'en')) {
-                $this->components->warn("{$asset->id()}: {$blocker}");
+                $skipped[] = "{$asset->id()}: {$blocker}";
 
-                continue;
+                return;
             }
 
-            $asset->delete();
+            DeletionSource::during(DeletionSource::CLI, fn () => $asset->delete());
             $deleted++;
+        });
+
+        $this->newLine(2);
+
+        foreach ($skipped as $message) {
+            $this->components->warn($message);
         }
 
-        $this->newLine();
         $this->components->info(sprintf('%d %s deleted.', $deleted, Str::plural('asset', $deleted)));
 
         return self::SUCCESS;

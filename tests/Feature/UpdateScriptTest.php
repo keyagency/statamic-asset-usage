@@ -139,4 +139,20 @@ class UpdateScriptTest extends TestCase
         $this->assertSame($config['containers'], '*');
         $this->assertStringContainsString('Scanned Content Types', File::get($this->path()));
     }
+
+    /**
+     * PHP doesn't require a comma after the last entry, so a hand-edited
+     * config may end without one. The result still has to parse.
+     */
+    #[Test]
+    public function a_last_entry_without_a_comma_still_gives_a_valid_config()
+    {
+        File::ensureDirectoryExists(dirname($this->path()));
+        File::put($this->path(), "<?php\n\nreturn [\n\n    'scanned_types' => [\n        'entries' => true // the rest is off\n    ],\n\n];\n");
+
+        $this->runScript();
+
+        $this->assertTrue($this->scannedTypes()['scanned_types']['entries']);
+        $this->assertTrue($this->scannedTypes()['scanned_types']['addon_settings']);
+    }
 }

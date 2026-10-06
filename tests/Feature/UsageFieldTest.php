@@ -9,6 +9,7 @@ use KeyAgency\AssetUsage\Usage\IndexStore;
 use PHPUnit\Framework\Attributes\Test;
 use Statamic\Facades\Asset;
 use Statamic\Facades\AssetContainer;
+use Statamic\Facades\Blink;
 
 class UsageFieldTest extends TestCase
 {
@@ -188,5 +189,75 @@ class UsageFieldTest extends TestCase
 
         $this->assertSame('A photo', $data['alt']);
         $this->assertArrayNotHasKey(InjectUsageField::HANDLE, $data);
+    }
+
+    /**
+     * Headed with the addon's name, so the panel reads as part of the addon and
+     * not as one of the container's own fields.
+     */
+    #[Test]
+    public function the_panel_sits_in_a_section_of_its_own()
+    {
+        $this->makeContainer('assets', ['img/photo.jpg']);
+
+        $sections = fn () => collect(Asset::find('assets::img/photo.jpg')->blueprint()->contents()['tabs'])
+            ->flatMap(fn ($tab) => $tab['sections'] ?? []);
+
+        $section = $sections()->first(fn ($section) => collect($section['fields'] ?? [])->contains('handle', InjectUsageField::HANDLE));
+
+        $this->assertSame(__('asset-usage::messages.nav_title'), $section['display']);
+        $this->assertCount(1, $section['fields']);
+
+        // Looking the blueprint up again doesn't add a second one.
+        $this->assertSame(1, $sections()->flatMap(fn ($section) => $section['fields'] ?? [])->where('handle', InjectUsageField::HANDLE)->count());
+    }
+
+    #[Test]
+    public function without_the_panel_the_field_gets_no_section()
+    {
+        config(['statamic.asset-usage.editor_panel' => false]);
+        $this->makeContainer('assets', ['img/photo.jpg']);
+
+        $displays = collect(Asset::find('assets::img/photo.jpg')->blueprint()->contents()['tabs'])
+            ->flatMap(fn ($tab) => $tab['sections'] ?? [])
+            ->pluck('display')
+            ->filter();
+
+        $this->assertNotContains(__('asset-usage::messages.nav_title'), $displays);
+        $this->assertTrue(Asset::find('assets::img/photo.jpg')->blueprint()->hasField(InjectUsageField::HANDLE));
+    }
+
+    /**
+     * Sorted by how often an asset is used, on the Stache's own index, which
+     * is dropped when the usage changes so the order follows the content.
+     */
+    #[Test]
+    public function the_column_sorts_by_usage_in_the_asset_browser()
+    {
+        $this->makeContainer('assets', ['img/a.jpg', 'img/b.jpg', 'img/c.jpg']);
+        $this->makeEntry('one', ['title' => 'One', 'hero' => 'img/b.jpg', 'thumb' => 'img/c.jpg']);
+        $this->makeEntry('two', ['title' => 'Two', 'hero' => 'img/b.jpg']);
+        $this->build();
+
+        $browse = function (string $order) {
+            // Each request starts with an empty Blink, so the blueprint is resolved for that request.
+            Blink::flush();
+
+            return $this->actingAs($this->superUser())
+                ->getJson('/'.config('statamic.cp.route').'/assets/browse/folders/assets/img?sort=asset_usage&order='.$order);
+        };
+        $paths = fn ($response) => collect($response->json('data'))->pluck('path')->all();
+
+        $response = $browse('desc');
+
+        $this->assertTrue(collect($response->json('meta.columns'))->firstWhere('field', InjectUsageField::HANDLE)['sortable']);
+        $this->assertSame(['img/b.jpg', 'img/c.jpg', 'img/a.jpg'], $paths($response));
+        $this->assertSame(['img/a.jpg', 'img/c.jpg', 'img/b.jpg'], $paths($browse('asc')));
+
+        foreach (['three', 'four', 'five'] as $slug) {
+            $this->makeEntry($slug, ['title' => ucfirst($slug), 'hero' => 'img/a.jpg']);
+        }
+
+        $this->assertSame('img/a.jpg', $paths($browse('desc'))[0]);
     }
 }

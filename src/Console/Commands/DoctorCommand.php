@@ -4,12 +4,20 @@ namespace KeyAgency\AssetUsage\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use KeyAgency\AssetUsage\Compression\AnalysisStore;
+use KeyAgency\AssetUsage\Compression\Backups;
+use KeyAgency\AssetUsage\Compression\Compressor;
+use KeyAgency\AssetUsage\Compression\ImageManagers;
+use KeyAgency\AssetUsage\Compression\Requirements;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use KeyAgency\AssetUsage\Usage\Reference;
 use Statamic\Console\RunsInPlease;
 use Statamic\Facades\Asset;
+use Statamic\Support\Str;
+use Symfony\Component\Process\Process;
+use Throwable;
 
 /**
  * Reports what the addon sees per container, next to what the asset browser
@@ -45,6 +53,7 @@ class DoctorCommand extends Command
         $this->components->twoColumnDetail('Stache watcher', config('statamic.stache.watcher') ? 'on' : 'off (listings are cached)');
         $this->components->twoColumnDetail('Scanned types', implode(', ', Settings::scannedTypes()));
         $this->reportUnconfiguredTypes();
+        $this->reportCompression();
         $this->newLine();
 
         foreach ($containers as $container) {
@@ -106,6 +115,59 @@ class DoctorCommand extends Command
     }
 
     /**
+     * The driver is the one Glide renders with, read from Glide itself, so a
+     * custom driver shows up as what it really is.
+     */
+    private function reportCompression(): void
+    {
+        if (! Settings::compressionEnabled()) {
+            $this->components->twoColumnDetail('Compression', 'off');
+
+            return;
+        }
+
+        try {
+            $manager = ImageManagers::glide();
+            $driver = ImageManagers::driver($manager);
+
+            $this->components->twoColumnDetail('Image driver (from Glide)', $driver ? $driver::class : $manager::class);
+
+            if (ImageManagers::countsAgainstMemoryLimit($manager)) {
+                $this->components->twoColumnDetail('memory_limit (limits GD)', (string) ini_get('memory_limit'));
+            }
+        } catch (Throwable $e) {
+            $this->components->twoColumnDetail('Image driver (from Glide)', '<error>'.$e->getMessage().'</error>');
+        }
+
+        if ($unsupported = Requirements::check()['unsupported_formats']) {
+            $this->components->twoColumnDetail('<comment>Formats the driver cannot handle</comment>', implode(', ', $unsupported));
+        }
+
+        $pngquant = Compressor::findPngquant();
+
+        $this->components->twoColumnDetail('pngquant', $pngquant
+            ? trim($pngquant.' '.$this->pngquantVersion($pngquant))
+            : '<comment>not found, PNGs are only resized and saved losslessly</comment>');
+
+        $analyzedAt = (new AnalysisStore)->meta()['analyzed_at'];
+
+        $this->components->twoColumnDetail('Compression analysed', $analyzedAt ?? '<comment>never</comment>');
+        $this->components->twoColumnDetail('Kept originals', Str::fileSizeForHumans((new Backups)->totalBytes(), 1));
+    }
+
+    private function pngquantVersion(string $binary): string
+    {
+        try {
+            $process = new Process([$binary, '--version']);
+            $process->run();
+
+            return $process->isSuccessful() ? '('.trim($process->getOutput()).')' : '';
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    /**
      * A published config replaces `scanned_types` as a whole, so a config
      * written before a type existed leaves that type switched off without ever
      * saying so.
@@ -162,7 +224,7 @@ class DoctorCommand extends Command
             );
 
             return $files->values();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->components->twoColumnDetail('Raw filesystem listing', '<comment>'.$e->getMessage().'</comment>');
 
             return null;

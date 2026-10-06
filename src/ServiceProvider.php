@@ -2,15 +2,25 @@
 
 namespace KeyAgency\AssetUsage;
 
+use Illuminate\Console\Scheduling\Schedule;
+use KeyAgency\AssetUsage\Console\Commands\AnalyzeCommand;
 use KeyAgency\AssetUsage\Console\Commands\DoctorCommand;
 use KeyAgency\AssetUsage\Console\Commands\IndexCommand;
+use KeyAgency\AssetUsage\Console\Commands\LogCommand;
+use KeyAgency\AssetUsage\Console\Commands\PruneOriginalsCommand;
 use KeyAgency\AssetUsage\Console\Commands\UnusedCommand;
 use KeyAgency\AssetUsage\Fieldtypes\AssetUsage;
+use KeyAgency\AssetUsage\Listeners\AnalyzeUploadedImage;
 use KeyAgency\AssetUsage\Listeners\InjectUsageField;
+use KeyAgency\AssetUsage\Listeners\KeepCompressionDataWithAssets;
+use KeyAgency\AssetUsage\Listeners\LogAssetDeletion;
 use KeyAgency\AssetUsage\Listeners\UpdateUsageIndex;
 use KeyAgency\AssetUsage\Query\Scopes\Filters\AssetUsage as UsageFilter;
 use KeyAgency\AssetUsage\Support\NavIcon;
+use KeyAgency\AssetUsage\Support\Settings;
 use Statamic\Events\AssetContainerBlueprintFound;
+use Statamic\Events\AssetReuploaded;
+use Statamic\Events\AssetUploaded;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
@@ -20,6 +30,8 @@ class ServiceProvider extends AddonServiceProvider
     public const PERMISSION_VIEW = 'view asset usage';
 
     public const PERMISSION_DELETE = 'delete unused assets';
+
+    public const PERMISSION_COMPRESS = 'compress assets';
 
     // Statamic would publish a second copy to config/asset-usage.php; we merge and publish our own below.
     protected $config = false;
@@ -45,8 +57,11 @@ class ServiceProvider extends AddonServiceProvider
     ];
 
     protected $commands = [
+        AnalyzeCommand::class,
         DoctorCommand::class,
         IndexCommand::class,
+        LogCommand::class,
+        PruneOriginalsCommand::class,
         UnusedCommand::class,
     ];
 
@@ -54,10 +69,18 @@ class ServiceProvider extends AddonServiceProvider
         AssetContainerBlueprintFound::class => [
             InjectUsageField::class,
         ],
+        AssetUploaded::class => [
+            AnalyzeUploadedImage::class,
+        ],
+        AssetReuploaded::class => [
+            AnalyzeUploadedImage::class,
+        ],
     ];
 
     protected $subscribe = [
         UpdateUsageIndex::class,
+        LogAssetDeletion::class,
+        KeepCompressionDataWithAssets::class,
     ];
 
     public function register(): void
@@ -75,6 +98,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->registerPermissions();
         $this->registerNav();
         $this->registerPublishables();
+        $this->registerSchedule();
     }
 
     protected function registerPermissions(): void
@@ -85,6 +109,8 @@ class ServiceProvider extends AddonServiceProvider
                 ->children([
                     Permission::make(self::PERMISSION_DELETE)
                         ->label(__('asset-usage::messages.permissions.delete')),
+                    Permission::make(self::PERMISSION_COMPRESS)
+                        ->label(__('asset-usage::messages.permissions.compress')),
                 ]);
         });
     }
@@ -92,10 +118,26 @@ class ServiceProvider extends AddonServiceProvider
     protected function registerNav(): void
     {
         Nav::extend(function ($nav) {
-            $nav->tools(__('asset-usage::messages.nav_title'))
+            $item = $nav->tools(__('asset-usage::messages.nav_title'))
                 ->icon(NavIcon::svg())
                 ->route('asset-usage.index')
                 ->can(self::PERMISSION_VIEW);
+
+            $item->children(array_values(array_filter([
+                $nav->item(__('asset-usage::messages.nav.usage'))->route('asset-usage.index')->can(self::PERMISSION_VIEW),
+                Settings::compressionEnabled()
+                    ? $nav->item(__('asset-usage::messages.nav.compression'))->route('asset-usage.compression')->can(self::PERMISSION_VIEW)
+                    : null,
+                $nav->item(__('asset-usage::messages.nav.log'))->route('asset-usage.log')->can(self::PERMISSION_VIEW),
+            ])));
+        });
+    }
+
+    /** Runs with the site's own scheduler; without one, originals are kept until pruned by hand. */
+    protected function registerSchedule(): void
+    {
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command(PruneOriginalsCommand::class)->daily();
         });
     }
 

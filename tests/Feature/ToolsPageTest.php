@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use KeyAgency\AssetUsage\Jobs\BuildIndex;
 use KeyAgency\AssetUsage\ServiceProvider;
 use KeyAgency\AssetUsage\Tests\TestCase;
+use KeyAgency\AssetUsage\Tests\Unit\ImageDensityTest;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use KeyAgency\AssetUsage\Usage\Unused;
@@ -119,9 +120,9 @@ class ToolsPageTest extends TestCase
         )->pluck('path')->all();
 
         $this->assertSame(['img/alpha.jpg', 'img/beta.jpg', 'img/popular.jpg'], $paths([]));
-        $this->assertSame(['img/popular.jpg', 'img/beta.jpg', 'img/alpha.jpg'], $paths(['sort' => 'name_desc']));
-        $this->assertSame(['img/popular.jpg', 'img/beta.jpg', 'img/alpha.jpg'], $paths(['sort' => 'used']));
-        $this->assertSame(['img/alpha.jpg', 'img/beta.jpg', 'img/popular.jpg'], $paths(['sort' => 'unused']));
+        $this->assertSame(['img/popular.jpg', 'img/beta.jpg', 'img/alpha.jpg'], $paths(['sort' => 'path', 'order' => 'desc']));
+        $this->assertSame(['img/popular.jpg', 'img/beta.jpg', 'img/alpha.jpg'], $paths(['sort' => 'usage', 'order' => 'desc']));
+        $this->assertSame(['img/alpha.jpg', 'img/beta.jpg', 'img/popular.jpg'], $paths(['sort' => 'usage', 'order' => 'asc']));
 
         // Anything unrecognised falls back to the default order.
         $this->assertSame(['img/alpha.jpg', 'img/beta.jpg', 'img/popular.jpg'], $paths(['sort' => 'nonsense']));
@@ -152,8 +153,83 @@ class ToolsPageTest extends TestCase
         )->pluck('path')->all();
 
         // Dates are compared across containers, and a tie keeps name order.
-        $this->assertSame(['img/new.jpg', 'docs/recent.pdf', 'img/also-middle.jpg', 'img/middle.jpg', 'img/old.jpg'], $paths(['sort' => 'newest']));
-        $this->assertSame(['img/old.jpg', 'img/also-middle.jpg', 'img/middle.jpg', 'docs/recent.pdf', 'img/new.jpg'], $paths(['sort' => 'oldest']));
+        $this->assertSame(['img/new.jpg', 'docs/recent.pdf', 'img/also-middle.jpg', 'img/middle.jpg', 'img/old.jpg'], $paths(['sort' => 'last_modified', 'order' => 'desc']));
+        $this->assertSame(['img/old.jpg', 'img/also-middle.jpg', 'img/middle.jpg', 'docs/recent.pdf', 'img/new.jpg'], $paths(['sort' => 'last_modified', 'order' => 'asc']));
+    }
+
+    #[Test]
+    public function it_sorts_the_overview_by_file_size()
+    {
+        $this->makeContainer('assets', ['img/small.jpg', 'img/large.jpg', 'img/medium.jpg', 'img/also-medium.jpg']);
+
+        $this->makeContainer('documents', ['docs/big.pdf'], '/documents');
+
+        $sizes = ['img/small.jpg' => 10, 'img/large.jpg' => 1000, 'img/medium.jpg' => 100, 'img/also-medium.jpg' => 100];
+
+        foreach ($sizes as $path => $bytes) {
+            Storage::disk('assets')->put($path, str_repeat('x', $bytes));
+        }
+
+        Storage::disk('documents')->put('docs/big.pdf', str_repeat('x', 500));
+
+        $this->build();
+
+        $paths = fn (array $query) => collect(
+            $this->actingAs($this->superUser())
+                ->getJson(cp_route('asset-usage.assets').'?'.http_build_query($query))
+                ->json('data')
+        )->pluck('path')->all();
+
+        // Sizes are compared across containers, and a tie keeps name order.
+        $this->assertSame(['img/large.jpg', 'docs/big.pdf', 'img/also-medium.jpg', 'img/medium.jpg', 'img/small.jpg'], $paths(['sort' => 'size', 'order' => 'desc']));
+        $this->assertSame(['img/small.jpg', 'img/also-medium.jpg', 'img/medium.jpg', 'docs/big.pdf', 'img/large.jpg'], $paths(['sort' => 'size', 'order' => 'asc']));
+    }
+
+    #[Test]
+    public function it_sorts_the_overview_by_resolution_and_dpi()
+    {
+        $this->makeContainer('assets', ['docs/manual.pdf']);
+        Storage::disk('assets')->put('img/print.png', ImageDensityTest::png(2, 2, [11811, 1]));
+        Storage::disk('assets')->put('img/screen.png', ImageDensityTest::png(4, 3, [2835, 1]));
+        Storage::disk('assets')->put('img/plain.png', ImageDensityTest::png(1, 1));
+        $this->build();
+
+        $paths = fn (array $query) => collect(
+            $this->actingAs($this->superUser())
+                ->getJson(cp_route('asset-usage.assets').'?'.http_build_query($query))
+                ->json('data')
+        )->pluck('path')->all();
+
+        // Assets without a value go last whichever way the column is sorted.
+        $this->assertSame(['img/screen.png', 'img/print.png', 'img/plain.png', 'docs/manual.pdf'], $paths(['sort' => 'resolution', 'order' => 'desc']));
+        $this->assertSame(['img/plain.png', 'img/print.png', 'img/screen.png', 'docs/manual.pdf'], $paths(['sort' => 'resolution', 'order' => 'asc']));
+        $this->assertSame(['img/print.png', 'img/screen.png', 'docs/manual.pdf', 'img/plain.png'], $paths(['sort' => 'dpi', 'order' => 'desc']));
+        $this->assertSame(['img/screen.png', 'img/print.png', 'docs/manual.pdf', 'img/plain.png'], $paths(['sort' => 'dpi', 'order' => 'asc']));
+    }
+
+    #[Test]
+    public function it_shows_the_resolution_and_dpi_of_images_only()
+    {
+        $this->makeContainer('assets', ['docs/manual.pdf']);
+        Storage::disk('assets')->put('img/print.png', ImageDensityTest::png(4, 3, [11811, 1]));
+        Storage::disk('assets')->put('img/web.png', ImageDensityTest::png(2, 2));
+        $this->build();
+
+        $rows = collect(
+            $this->actingAs($this->superUser())
+                ->getJson(cp_route('asset-usage.assets'))
+                ->json('data')
+        )->keyBy('path');
+
+        $this->assertSame('4 × 3', $rows['img/print.png']['dimensions']);
+        $this->assertSame(300, $rows['img/print.png']['dpi']);
+
+        // An image that declares no density still has a resolution.
+        $this->assertSame('2 × 2', $rows['img/web.png']['dimensions']);
+        $this->assertNull($rows['img/web.png']['dpi']);
+
+        $this->assertNull($rows['docs/manual.pdf']['dimensions']);
+        $this->assertNull($rows['docs/manual.pdf']['dpi']);
     }
 
     #[Test]

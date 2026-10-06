@@ -3,6 +3,7 @@
 namespace KeyAgency\AssetUsage\UpdateScripts;
 
 use Illuminate\Support\Facades\File;
+use KeyAgency\AssetUsage\UpdateScripts\Concerns\InsertsIntoConfig;
 use Statamic\UpdateScripts\UpdateScript;
 
 /**
@@ -16,6 +17,8 @@ use Statamic\UpdateScripts\UpdateScript;
  */
 class AddRebuildReminderToPublishedConfig extends UpdateScript
 {
+    use InsertsIntoConfig;
+
     private const KEY = 'rebuild_reminder_days';
 
     /**
@@ -98,9 +101,7 @@ PHP;
         // The array `return [` opens, closed on a line of its own.
         for ($i = count($lines) - 1; $i >= 0; $i--) {
             if (preg_match('/^\];\s*$/', $lines[$i]) === 1) {
-                array_splice($lines, $i, 0, explode("\n", self::BLOCK));
-
-                return implode("\n", $lines);
+                return $this->insertBefore($lines, $i, explode("\n", self::BLOCK));
             }
         }
 

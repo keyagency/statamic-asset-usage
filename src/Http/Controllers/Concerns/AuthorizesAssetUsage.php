@@ -17,17 +17,30 @@ trait AuthorizesAssetUsage
         $this->authorizePermission(ServiceProvider::PERMISSION_DELETE);
     }
 
+    protected function authorizeCompress(): void
+    {
+        $this->authorizePermission(ServiceProvider::PERMISSION_COMPRESS);
+    }
+
     protected function canDelete(): bool
+    {
+        return $this->hasPermission(ServiceProvider::PERMISSION_DELETE);
+    }
+
+    protected function canCompress(): bool
+    {
+        return $this->hasPermission(ServiceProvider::PERMISSION_COMPRESS);
+    }
+
+    private function hasPermission(string $permission): bool
     {
         $user = User::current();
 
-        return (bool) $user && ($user->isSuper() || $user->hasPermission(ServiceProvider::PERMISSION_DELETE));
+        return (bool) $user && ($user->isSuper() || $user->hasPermission($permission));
     }
 
     private function authorizePermission(string $permission): void
     {
-        $user = User::current();
-
-        abort_unless($user && ($user->isSuper() || $user->hasPermission($permission)), 403);
+        abort_unless($this->hasPermission($permission), 403);
     }
 }

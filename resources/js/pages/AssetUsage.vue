@@ -1,5 +1,4 @@
 <script>
-import { DateFormatter } from '@statamic/cms'
 import { Head } from '@statamic/cms/inertia'
 import {
     Alert,
@@ -7,15 +6,24 @@ import {
     Button,
     Card,
     ConfirmationModal,
+    Description,
     Header,
+    Heading,
+    Icon,
     Input,
     Pagination,
+    Panel,
+    PanelFooter,
     Select,
     Text,
 } from '@statamic/cms/ui'
+import CompressionCard from '../components/CompressionCard.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import MarkedText from '../components/MarkedText.vue'
+import PageTabs from '../components/PageTabs.vue'
 import RowCheckbox from '../components/RowCheckbox.vue'
 import UsageList from '../components/UsageList.vue'
+import { formatBytes, formatDate, mark, parts } from '../support/formatting.js'
 
 /**
  * Stands in for "any site" in the filter. An option can't carry an empty
@@ -24,18 +32,29 @@ import UsageList from '../components/UsageList.vue'
  */
 const ANY_SITE = '*'
 
+/** Failed status checks in a row before polling gives up (an expired session, a server error). */
+const MAX_POLL_FAILURES = 5
+
 export default {
     components: {
         Alert,
         Badge,
         Button,
         Card,
+        CompressionCard,
         ConfirmationModal,
+        Description,
         Head,
         Header,
+        Heading,
+        Icon,
         Input,
         ListSkeleton,
+        MarkedText,
+        PageTabs,
         Pagination,
+        Panel,
+        PanelFooter,
         RowCheckbox,
         Select,
         Text,
@@ -43,6 +62,10 @@ export default {
     },
 
     props: {
+        /** 'usage', or 'compression' for the same overview narrowed down to compressible images. */
+        view: { type: String, default: 'usage' },
+        usageUrl: String,
+        compressionPageUrl: String,
         icon: String,
         multisite: Boolean,
         canDelete: Boolean,
@@ -53,7 +76,12 @@ export default {
         destroyUnusedUrl: String,
         containers: Array,
         sites: Array,
-        minimumAgeInDays: Number,
+        compressionEnabled: Boolean,
+        canCompress: Boolean,
+        analyzeUrl: String,
+        compressionStatusUrl: String,
+        compressUrl: String,
+        logUrl: String,
     },
 
     data() {
@@ -61,7 +89,9 @@ export default {
             assets: [],
             meta: null,
             index: { exists: false, stale: true, aged: false, auto_update: true, building: false, built_at: null, items_scanned: 0 },
-            filters: { usage: 'all', container: null, site: ANY_SITE, search: '', sort: 'name_asc' },
+            filters: { usage: 'all', container: null, site: ANY_SITE, search: '', compression: 'all' },
+            sortColumn: this.view === 'compression' ? 'savings' : 'path',
+            sortDirection: this.view === 'compression' ? 'desc' : 'asc',
             page: 1,
             /** False until the first response lands, so nothing flashes an empty or stale state. */
             ready: false,
@@ -74,10 +104,28 @@ export default {
             confirmingAllUnused: false,
             searchTimeout: null,
             poll: null,
+            /** Numbers each load(), so a slow earlier response can't overwrite a newer one. */
+            latestLoad: 0,
+            /** Where the compression analysis stands; null while compression is off. */
+            compression: null,
+            startingAnalysis: false,
+            compressionPoll: null,
         }
     },
 
     computed: {
+        /** Deleting belongs to the usage overview; the compression view leaves it out. */
+        deletes() {
+            return this.canDelete && this.view === 'usage'
+        },
+
+        compressionOptions() {
+            return ['all', 'compressible', 'compressed'].map(value => ({
+                value,
+                label: __(`asset-usage::messages.compress.filters.${value}`),
+            }))
+        },
+
         usageOptions() {
             return [
                 { value: 'all', label: __('asset-usage::messages.filters.all') },
@@ -86,14 +134,16 @@ export default {
             ]
         },
 
-        sortOptions() {
+        /** Every column can be sorted, both ways, by clicking its heading. */
+        columns() {
             return [
-                { value: 'name_asc', label: __('asset-usage::messages.sort.name_asc') },
-                { value: 'name_desc', label: __('asset-usage::messages.sort.name_desc') },
-                { value: 'newest', label: __('asset-usage::messages.sort.newest') },
-                { value: 'oldest', label: __('asset-usage::messages.sort.oldest') },
-                { value: 'used', label: __('asset-usage::messages.sort.used') },
-                { value: 'unused', label: __('asset-usage::messages.sort.unused') },
+                { field: 'path', label: __('asset-usage::messages.columns.name') },
+                { field: 'size', label: __('asset-usage::messages.columns.size') },
+                { field: 'resolution', label: __('asset-usage::messages.columns.resolution') },
+                { field: 'dpi', label: __('asset-usage::messages.columns.dpi') },
+                ...(this.showsSavings ? [{ field: 'savings', label: __('asset-usage::messages.columns.savings') }] : []),
+                { field: 'last_modified', label: __('asset-usage::messages.columns.last_modified') },
+                { field: 'usage', label: __('asset-usage::messages.columns.usage') },
             ]
         },
 
@@ -113,7 +163,11 @@ export default {
             return {
                 ...this.filters,
                 site: this.filters.site === ANY_SITE ? '' : this.filters.site,
+                sort: this.sortColumn,
+                order: this.sortDirection,
                 page: this.page,
+                // Only the compression page narrows the list down by compression.
+                compression: this.view === 'compression' ? this.filters.compression : undefined,
             }
         },
 
@@ -154,12 +208,37 @@ export default {
             return __(`asset-usage::messages.index.${key}`, { time: this.index.built_at_relative })
         },
 
+        /** Hidden when the image driver is missing: every cell would be empty. */
+        showsSavings() {
+            return this.compressionEnabled && this.compression?.available !== false
+        },
+
+        compressionAnalyzedAt() {
+            if (!this.compression?.analyzed_at) return null
+
+            return formatDate(this.compression.analyzed_at, { preset: 'datetime', month: 'long' })
+        },
+
+        /** The headline of the analysis card, with the numbers marked to stand out. */
+        compressionHeadline() {
+            const compression = this.compression
+
+            if (compression.analyzing) return parts(__('asset-usage::messages.compress.analyzing'))
+            if (compression.never_analyzed) return parts(__('asset-usage::messages.compress.never_analyzed_heading'))
+
+            return parts(__n('asset-usage::messages.compress.summary', compression.compressible, {
+                count: mark(compression.compressible),
+                size: mark(formatBytes(compression.savable_bytes)),
+                threshold: compression.threshold,
+            }))
+        },
+
         /**
          * Formatted like Statamic's own CP dates: in the browser's timezone and
          * the user's formatting locale.
          */
         builtAt() {
-            return DateFormatter.format(this.index.built_at, { preset: 'datetime', month: 'long' })
+            return formatDate(this.index.built_at, { preset: 'datetime', month: 'long' })
         },
 
         busy() {
@@ -207,9 +286,9 @@ export default {
 
     watch: {
         'filters.usage': 'reload',
+        'filters.compression': 'reload',
         'filters.container': 'reload',
         'filters.site': 'reload',
-        'filters.sort': 'reload',
 
         'filters.search'() {
             clearTimeout(this.searchTimeout)
@@ -224,22 +303,32 @@ export default {
     beforeUnmount() {
         clearTimeout(this.searchTimeout)
         this.stopPolling()
+        this.stopCompressionPolling()
     },
 
     methods: {
         load() {
+            const current = ++this.latestLoad
             this.loading = true
 
             this.$axios
                 .get(this.assetsUrl, { params: this.requestParams })
                 .then(response => {
+                    if (current !== this.latestLoad) return
+
                     this.assets = response.data.data
                     this.meta = response.data.meta
                     this.setIndex(response.data.meta.index)
-                    this.selected = []
+                    this.setCompression(response.data.meta.compression)
+                    // A reload after a rebuild or an analysis keeps what is still on the page and deletable.
+                    this.selected = this.selected.filter(id => this.deletableAssets.some(asset => asset.id === id))
                 })
-                .catch(error => this.$toast.error(this.errorMessage(error)))
+                .catch(error => {
+                    if (current === this.latestLoad) this.$toast.error(this.errorMessage(error))
+                })
                 .finally(() => {
+                    if (current !== this.latestLoad) return
+
                     this.loading = false
                     this.ready = true
                 })
@@ -285,37 +374,119 @@ export default {
         },
 
         startPolling() {
-            if (this.poll) return
+            this.startPoll('poll', this.statusUrl, data => {
+                if (!data.index.building) {
+                    this.stopPolling()
+                    this.load()
+                }
 
-            this.poll = setInterval(() => {
-                this.$axios.get(this.statusUrl).then(response => {
-                    const index = response.data.index
-
-                    if (!index.building) {
-                        this.stopPolling()
-                        this.load()
-                    }
-
-                    this.index = index
-                })
-            }, 3000)
+                this.index = data.index
+            })
         },
 
         stopPolling() {
-            if (!this.poll) return
+            this.stopPoll('poll')
+        },
 
-            clearInterval(this.poll)
-            this.poll = null
+        /**
+         * Checks a status URL every few seconds, one request at a time, and
+         * gives up after a few failures in a row rather than polling forever.
+         * `key` is the data property that holds the interval.
+         */
+        startPoll(key, url, onStatus) {
+            if (this[key]) return
+
+            let inFlight = false
+            let failures = 0
+
+            this[key] = setInterval(() => {
+                if (inFlight) return
+
+                inFlight = true
+
+                this.$axios
+                    .get(url)
+                    .then(response => {
+                        failures = 0
+                        onStatus(response.data)
+                    })
+                    .catch(error => {
+                        if (++failures < MAX_POLL_FAILURES) return
+
+                        this.stopPoll(key)
+                        this.$toast.error(this.errorMessage(error))
+                    })
+                    .finally(() => (inFlight = false))
+            }, 3000)
+        },
+
+        stopPoll(key) {
+            if (!this[key]) return
+
+            clearInterval(this[key])
+            this[key] = null
+        },
+
+        analyze() {
+            this.startingAnalysis = true
+
+            this.$axios
+                .post(this.analyzeUrl)
+                .then(response => {
+                    this.$toast.success(__('asset-usage::messages.compress.analyze_started'))
+                    this.setCompression(response.data.compression)
+                    this.load()
+                })
+                .catch(error => this.$toast.error(this.errorMessage(error)))
+                .finally(() => (this.startingAnalysis = false))
+        },
+
+        /** Same idea as setIndex: a queued analysis finishes outside this request. */
+        setCompression(compression) {
+            this.compression = compression
+
+            if (compression?.analyzing) {
+                this.startCompressionPolling()
+            } else {
+                this.stopCompressionPolling()
+            }
+        },
+
+        startCompressionPolling() {
+            this.startPoll('compressionPoll', this.compressionStatusUrl, data => {
+                if (!data.compression.analyzing) {
+                    this.stopCompressionPolling()
+                    this.load()
+                }
+
+                this.compression = data.compression
+            })
+        },
+
+        stopCompressionPolling() {
+            this.stopPoll('compressionPoll')
+        },
+
+        formatBytes(bytes) {
+            return formatBytes(bytes)
+        },
+
+        savingsLabel(savings) {
+            return `−${Math.round(savings)}%`
+        },
+
+        compressLink(asset) {
+            return `${this.compressUrl}?asset=${encodeURIComponent(asset.id)}`
         },
 
         confirmDelete(assets) {
-            if (!this.canDelete || assets.length === 0) return
+            if (!this.deletes || assets.length === 0) return
 
             this.confirming = assets
         },
 
         confirmDeleteAllUnused() {
-            if (!this.canDelete || !this.unusedTotal) return
+            if (!this.deletes || !this.unusedTotal) return
 
             this.confirmingAllUnused = true
         },
@@ -386,6 +557,33 @@ export default {
             return this.expanded.includes(id)
         },
 
+        /**
+         * Same behaviour as Statamic's own listings: a second click flips the
+         * direction, and a new column starts ascending, dates descending.
+         */
+        sortBy(field) {
+            if (this.sortColumn === field) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'
+            } else {
+                this.sortColumn = field
+                this.sortDirection = field === 'last_modified' ? 'desc' : 'asc'
+            }
+
+            this.reload()
+        },
+
+        sortIcon(field) {
+            if (this.sortColumn !== field) return null
+
+            return this.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc'
+        },
+
+        ariaSort(field) {
+            if (this.sortColumn !== field) return 'none'
+
+            return this.sortDirection === 'asc' ? 'ascending' : 'descending'
+        },
+
         errorMessage(error) {
             return error.response?.data?.message ?? error.message
         },
@@ -395,286 +593,470 @@ export default {
 
 <template>
     <div>
-        <Head :title="__('asset-usage::messages.nav_title')" />
+        <Head :title="view === 'compression' ? __('asset-usage::messages.nav.compression') : __('asset-usage::messages.nav_title')" />
 
         <Header :title="__('asset-usage::messages.nav_title')" :icon="icon">
-            <Text
-                v-if="ready && index.built_at"
-                size="sm"
-                variant="subtle"
-                :title="index.built_at_relative"
-                :text="__('asset-usage::messages.index.updated_at', { time: builtAt })"
-            />
-            <Button
-                variant="primary"
-                :disabled="busy"
-                :text="rebuilding || index.building ? __('asset-usage::messages.index.refreshing') : __('asset-usage::messages.index.refresh')"
-                @click="rebuild"
-            />
+            <template v-if="view === 'usage'">
+                <Text
+                    v-if="ready && index.built_at"
+                    size="sm"
+                    variant="subtle"
+                    :title="index.built_at_relative"
+                    :text="__('asset-usage::messages.index.updated_at', { time: builtAt })"
+                />
+                <Button
+                    variant="primary"
+                    :disabled="busy"
+                    :text="rebuilding || index.building ? __('asset-usage::messages.index.refreshing') : __('asset-usage::messages.index.refresh')"
+                    @click="rebuild"
+                />
+            </template>
+
+            <!-- The same place as on the overview: when it last ran, and the button that runs it. -->
+            <template v-else-if="compression?.available">
+                <Text
+                    v-if="compressionAnalyzedAt"
+                    size="sm"
+                    variant="subtle"
+                    :text="__('asset-usage::messages.compress.last_analyzed', { time: compressionAnalyzedAt })"
+                />
+                <Button
+                    v-if="canCompress"
+                    variant="primary"
+                    :disabled="busy || startingAnalysis || compression.analyzing"
+                    :text="compression.analyzing ? __('asset-usage::messages.compress.analyzing') : __('asset-usage::messages.compress.analyze')"
+                    @click="analyze"
+                />
+            </template>
         </Header>
+
+        <PageTabs
+            :current="view"
+            :usage-url="usageUrl"
+            :compression-url="compressionEnabled ? compressionPageUrl : null"
+            :log-url="logUrl"
+        />
 
         <ListSkeleton v-if="!ready" />
 
         <template v-else>
-        <Alert
-            v-if="!containers.length"
-            class="mb-4"
-            variant="warning"
-            :text="__('asset-usage::messages.no_containers')"
-        />
-
-        <Alert
-            v-else-if="index.building"
-            class="mb-4"
-            :text="__('asset-usage::messages.index.checking')"
-        />
-
-        <Alert
-            v-else-if="index.stale"
-            class="mb-4"
-            variant="warning"
-            :heading="index.exists ? __('asset-usage::messages.index.stale') : __('asset-usage::messages.index.not_ready')"
-            :text="index.exists ? __('asset-usage::messages.index.stale_instructions') : __('asset-usage::messages.index.not_ready_instructions')"
-        />
-
-        <!-- Deliberately not a warning: the data is usable, a rebuild is just overdue. -->
-        <Alert
-            v-else-if="index.aged"
-            class="mb-4"
-            :heading="__('asset-usage::messages.index.aged')"
-            :text="agedInstructions"
-        />
-
-        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Input
-                v-model="filters.search"
-                class="w-full sm:min-w-32 sm:flex-1"
-                type="search"
-                :placeholder="__('asset-usage::messages.filters.search_placeholder')"
+            <Alert
+                v-if="!containers.length"
+                class="mb-4"
+                variant="warning"
+                :text="__('asset-usage::messages.no_containers')"
             />
 
-            <Select
-                v-model="filters.usage"
-                class="w-full sm:w-auto! sm:min-w-44 sm:shrink-0"
-                :options="usageOptions"
-                option-label="label"
-                option-value="value"
+            <Alert
+                v-else-if="view === 'usage' && index.building"
+                class="mb-4"
+                :text="__('asset-usage::messages.index.checking')"
             />
 
-            <Select
-                v-if="containers.length > 1"
-                v-model="filters.container"
-                clearable
-                class="w-full sm:w-auto! sm:min-w-56 sm:shrink-0"
-                :options="containerOptions"
-                option-label="label"
-                option-value="value"
-                :placeholder="__('asset-usage::messages.filters.container')"
+            <Alert
+                v-else-if="view === 'usage' && index.stale"
+                class="mb-4"
+                variant="warning"
+                :heading="index.exists ? __('asset-usage::messages.index.stale') : __('asset-usage::messages.index.not_ready')"
+                :text="index.exists ? __('asset-usage::messages.index.stale_instructions') : __('asset-usage::messages.index.not_ready_instructions')"
             />
 
-            <Select
-                v-if="multisite"
-                v-model="filters.site"
-                class="w-full sm:w-auto! sm:min-w-56 sm:shrink-0"
-                :options="siteOptions"
-                option-label="label"
-                option-value="value"
-            />
-        </div>
-
-        <div class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-                v-if="canDelete"
-                variant="danger"
-                :disabled="busy || !selected.length"
-                :text="deleteSelectedText"
-                @click="confirmDelete(selectedAssets())"
+            <!-- Deliberately not a warning: the data is usable, a rebuild is just overdue. -->
+            <Alert
+                v-else-if="view === 'usage' && index.aged"
+                class="mb-4"
+                :heading="__('asset-usage::messages.index.aged')"
+                :text="agedInstructions"
             />
 
-            <Button
-                v-if="canDelete && unusedTotal"
-                :disabled="busy"
-                :text="`${__('asset-usage::messages.delete.all_unused')} (${unusedTotal})`"
-                @click="confirmDeleteAllUnused"
-            />
-
-            <Select
-                v-model="filters.sort"
-                class="w-full sm:ms-auto sm:w-auto! sm:min-w-56 sm:shrink-0"
-                :options="sortOptions"
-                option-label="label"
-                option-value="value"
-            />
-        </div>
-
-        <Text
-            v-if="!assets.length"
-            as="p"
-            class="italic"
-            size="sm"
-            variant="subtle"
-            :text="__('asset-usage::messages.no_results')"
-        />
-
-        <Card v-else inset :class="{ 'pointer-events-none opacity-60': busy }" :aria-disabled="busy">
-            <div
-                v-if="canDelete && deletableAssets.length"
-                class="flex items-center gap-3 border-b border-gray-200 px-4 py-2.5 dark:border-gray-700"
+            <!--
+                Everything about compression lives on its own page. The overview only keeps the
+                Saving column and points there when there is something to gain. Centred on wider
+                screens, where the button makes the row taller than the icon.
+            -->
+            <Alert
+                v-if="view === 'usage' && compression?.available && compression.compressible && !compression.analyzing"
+                class="mb-4 sm:items-center!"
             >
-                <RowCheckbox
-                    show-label
-                    :model-value="allDeletableSelected"
-                    :indeterminate="someDeletableSelected"
-                    :label="__('asset-usage::messages.delete.select_all')"
-                    @update:model-value="toggleAll"
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <MarkedText :parts="compressionHeadline" marked-class="font-semibold text-green-700 dark:text-green-400" />
+                    <Button
+                        class="shrink-0"
+                        size="sm"
+                        :href="compressionPageUrl"
+                        :text="__('asset-usage::messages.compress.open_page')"
+                    />
+                </div>
+            </Alert>
+
+            <Alert v-if="view === 'compression' && compression && !compression.available" class="mb-4" variant="warning">
+                <Heading :text="__('asset-usage::messages.compress.unavailable_heading')" />
+                <Description :text="__('asset-usage::messages.compress.unavailable', { driver: compression.requirements.driver })" />
+                <a
+                    v-if="compression.requirements.driver_install_url"
+                    class="mt-1 inline-block text-sm font-medium underline hover:no-underline"
+                    :href="compression.requirements.driver_install_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    v-text="__('asset-usage::messages.compress.driver_link', { driver: compression.requirements.driver })"
+                />
+            </Alert>
+
+            <template v-else-if="view === 'compression' && compression">
+                <Alert
+                    v-if="compression.settings_changed && !compression.analyzing"
+                    class="mb-4"
+                    variant="warning"
+                    :heading="__('asset-usage::messages.compress.settings_changed_heading')"
+                    :text="__('asset-usage::messages.compress.settings_changed')"
+                />
+
+                <CompressionCard class="mb-4" :compression="compression" :headline="compressionHeadline" :log-url="logUrl" />
+            </template>
+
+            <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                    v-model="filters.search"
+                    class="w-full sm:min-w-32 sm:flex-1"
+                    type="search"
+                    :placeholder="__('asset-usage::messages.filters.search_placeholder')"
+                />
+
+                <Select
+                    v-if="view === 'compression'"
+                    v-model="filters.compression"
+                    class="w-full sm:w-auto! sm:min-w-44 sm:shrink-0"
+                    :options="compressionOptions"
+                    option-label="label"
+                    option-value="value"
+                />
+
+                <Select
+                    v-if="view === 'usage'"
+                    v-model="filters.usage"
+                    class="w-full sm:w-auto! sm:min-w-44 sm:shrink-0"
+                    :options="usageOptions"
+                    option-label="label"
+                    option-value="value"
+                />
+
+                <Select
+                    v-if="containers.length > 1"
+                    v-model="filters.container"
+                    clearable
+                    class="w-full sm:w-auto! sm:min-w-56 sm:shrink-0"
+                    :options="containerOptions"
+                    option-label="label"
+                    option-value="value"
+                    :placeholder="__('asset-usage::messages.filters.container')"
+                />
+
+                <Select
+                    v-if="multisite && view === 'usage'"
+                    v-model="filters.site"
+                    class="w-full sm:w-auto! sm:min-w-56 sm:shrink-0"
+                    :options="siteOptions"
+                    option-label="label"
+                    option-value="value"
                 />
             </div>
 
-            <div class="divide-y divide-gray-200 dark:divide-gray-700">
-                <div v-for="asset in assets" :key="asset.id" class="px-4 py-2.5">
-                    <div class="flex items-center gap-3">
-                        <!-- No checkbox at all when the asset can't be deleted; a disabled one only invites clicking. -->
-                        <RowCheckbox
-                            v-if="canDelete && !asset.blocker"
-                            :model-value="isSelected(asset.id)"
-                            :label="asset.path"
-                            @update:model-value="toggleSelected(asset.id)"
-                        />
-                        <div v-else-if="canDelete" class="size-4 shrink-0" aria-hidden="true" />
-
-                        <img
-                            v-if="asset.thumbnail"
-                            class="size-10 shrink-0 rounded object-cover"
-                            :src="asset.thumbnail"
-                            :alt="asset.basename"
-                        />
-                        <div
-                            v-else
-                            class="flex size-10 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] font-medium text-gray-500 uppercase dark:bg-gray-800 dark:text-gray-400"
-                            v-text="asset.extension"
-                        />
-
-                        <div class="flex min-w-0 flex-1 items-center gap-2">
-                            <a
-                                class="truncate font-medium hover:underline"
-                                :href="asset.edit_url"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                v-text="asset.path"
-                            />
-
-                            <Badge v-if="containers.length > 1" :text="asset.container_title" />
-
-                            <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400" v-text="asset.size" />
-                            <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400" v-text="asset.last_modified" />
-                        </div>
-
-                        <!-- Without a current index a count of 0 means "not checked", not "unused". -->
-                        <Badge
-                            v-if="index.stale"
-                            class="shrink-0"
-                            :text="__('asset-usage::messages.index.not_ready')"
-                        />
-                        <Badge
-                            v-else-if="asset.count === 0"
-                            class="shrink-0"
-                            color="orange"
-                            :text="__('asset-usage::messages.filters.unused')"
-                        />
-                        <Badge
-                            v-else
-                            class="shrink-0"
-                            :text="__n('asset-usage::messages.used_count', asset.count, { count: asset.count })"
-                        />
-
-                        <Button
-                            v-if="!index.stale && asset.count"
-                            size="sm"
-                            variant="ghost"
-                            class="shrink-0"
-                            :icon="isExpanded(asset.id) ? 'chevron-up' : 'chevron-down'"
-                            :aria-expanded="isExpanded(asset.id)"
-                            :text="__('asset-usage::messages.details')"
-                            @click="toggleExpanded(asset.id)"
-                        />
-
-                        <Button
-                            v-if="canDelete"
-                            size="sm"
-                            variant="ghost"
-                            icon="trash"
-                            icon-only
-                            class="shrink-0"
-                            :disabled="!!asset.blocker"
-                            :title="asset.blocker || __('asset-usage::messages.delete.action')"
-                            :aria-label="__('asset-usage::messages.delete.action')"
-                            @click="confirmDelete([asset])"
-                        />
-                    </div>
-
-                    <UsageList
-                        v-if="isExpanded(asset.id)"
-                        class="mt-2 ps-7"
-                        :usages="asset.usages"
-                        :site-titles="siteTitles"
-                        :multisite="multisite"
-                    />
-                </div>
-            </div>
-        </Card>
-
-        <Pagination
-            v-if="meta && meta.last_page > 1"
-            class="mt-4"
-            :class="{ 'pointer-events-none opacity-60': busy }"
-            :resource-meta="meta"
-            show-totals
-            show-page-links
-            :show-per-page-selector="false"
-            @page-selected="goToPage"
-        />
-
-        <div class="mt-6 border-t border-gray-200 pt-4 text-center dark:border-gray-700">
-            <Text
-                as="p"
-                class="mx-auto max-w-2xl"
-                size="sm"
-                variant="subtle"
-                :text="__('asset-usage::messages.not_scanned')"
-            />
-
-            <Text
-                as="p"
-                class="mx-auto mt-2 max-w-2xl"
-                size="sm"
-                variant="subtle"
-                :text="__('asset-usage::messages.disclaimer')"
-            />
-
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {{ __('asset-usage::messages.made_by') }}
-                <a
-                    class="text-blue-600 hover:underline dark:text-blue-400"
-                    href="https://statamic.com/creators/key-agency"
-                    target="_blank"
-                    rel="noopener"
-                >Key Agency</a>
-                <span class="mx-1" aria-hidden="true">·</span>
-                <a
-                    class="text-blue-600 hover:underline dark:text-blue-400"
-                    href="https://github.com/keyagency"
-                    target="_blank"
-                    rel="noopener"
-                >GitHub</a>
-                <span class="mx-1" aria-hidden="true">·</span>
-                <a
-                    class="text-blue-600 hover:underline dark:text-blue-400"
-                    href="https://statamic.com/addons/key-agency/asset-usage"
-                    target="_blank"
-                    rel="noopener"
-                >Statamic Marketplace</a>
+            <!-- What was deleted so far, with the way to the log that lists it. -->
+            <p
+                v-if="view === 'usage' && meta?.deletions?.count"
+                class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600 dark:text-gray-400"
+            >
+                <Icon name="trash" class="size-4 shrink-0" />
+                <span class="tabular-nums">
+                    {{ __n('asset-usage::messages.log.deleted_count', meta.deletions.count, { count: meta.deletions.count }) }}
+                    <span aria-hidden="true"> · </span>
+                    <strong class="font-semibold" v-text="__('asset-usage::messages.log.freed', { size: formatBytes(meta.deletions.bytes) })" />
+                </span>
+                <Button size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
             </p>
-        </div>
+
+            <div v-if="deletes" class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Button
+                    variant="danger"
+                    :disabled="busy || !selected.length"
+                    :text="deleteSelectedText"
+                    @click="confirmDelete(selectedAssets())"
+                />
+
+                <Button
+                    v-if="unusedTotal"
+                    :disabled="busy"
+                    :text="`${__('asset-usage::messages.delete.all_unused')} (${unusedTotal})`"
+                    @click="confirmDeleteAllUnused"
+                />
+            </div>
+
+            <Text
+                v-if="!assets.length"
+                as="p"
+                class="italic"
+                size="sm"
+                variant="subtle"
+                :text="view !== 'compression'
+                    ? __('asset-usage::messages.no_results')
+                    : __(filters.compression === 'compressed' ? 'asset-usage::messages.compress.none_compressed' : 'asset-usage::messages.compress.none_compressible')"
+            />
+
+            <Panel v-else>
+                <!-- Relative too, so absolutely positioned content such as the sr-only heading is clipped here as well. -->
+                <Card
+                    inset
+                    class="relative overflow-x-auto overscroll-x-contain"
+                    :class="{ 'pointer-events-none opacity-60': busy }"
+                    :aria-disabled="busy"
+                >
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-start dark:border-gray-700">
+                                <th v-if="deletes" scope="col" class="w-px py-2.5 ps-4">
+                                    <!-- A block-level flex box, because an inline checkbox sits on the text baseline instead of the middle. -->
+                                    <div class="flex items-center">
+                                        <RowCheckbox
+                                            v-if="deletableAssets.length"
+                                            :model-value="allDeletableSelected"
+                                            :indeterminate="someDeletableSelected"
+                                            :label="__('asset-usage::messages.delete.select_all')"
+                                            @update:model-value="toggleAll"
+                                        />
+                                    </div>
+                                </th>
+                                <th
+                                    v-for="column in columns"
+                                    :key="column.field"
+                                    scope="col"
+                                    class="px-4 py-2.5 text-start whitespace-nowrap"
+                                    :aria-sort="ariaSort(column.field)"
+                                >
+                                    <Button
+                                        :text="column.label"
+                                        :icon-append="sortIcon(column.field)"
+                                        size="sm"
+                                        variant="ghost"
+                                        class="-my-1 -ms-3 text-sm! font-medium! text-gray-900! dark:text-gray-400!"
+                                        @click="sortBy(column.field)"
+                                    />
+                                </th>
+                                <th v-if="deletes" scope="col" class="px-4 py-2.5">
+                                    <span class="sr-only" v-text="__('asset-usage::messages.delete.action')" />
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <template v-for="asset in assets" :key="asset.id">
+                                <!-- An expanded row hands its bottom border to the details row, so the two read as one. -->
+                                <tr
+                                    class="border-gray-200 last:border-b-0 dark:border-gray-700"
+                                    :class="{ 'border-b': !isExpanded(asset.id) }"
+                                >
+                                    <td v-if="deletes" class="py-2.5 ps-4">
+                                        <!-- No checkbox at all when the asset can't be deleted; a disabled one only invites clicking. -->
+                                        <div class="flex items-center">
+                                            <RowCheckbox
+                                                v-if="!asset.blocker"
+                                                :model-value="isSelected(asset.id)"
+                                                :label="asset.path"
+                                                @update:model-value="toggleSelected(asset.id)"
+                                            />
+                                        </div>
+                                    </td>
+
+                                    <td class="w-full px-4 py-2.5">
+                                        <div class="flex min-w-56 items-center gap-3">
+                                            <img
+                                                v-if="asset.thumbnail"
+                                                class="size-10 shrink-0 rounded object-cover"
+                                                :src="asset.thumbnail"
+                                                :alt="asset.basename"
+                                            />
+                                            <div
+                                                v-else
+                                                class="flex size-10 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] font-medium text-gray-500 uppercase dark:bg-gray-800 dark:text-gray-400"
+                                                v-text="asset.extension"
+                                            />
+
+                                            <a
+                                                class="font-medium break-all hover:underline"
+                                                :href="asset.edit_url"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                v-text="asset.path"
+                                            />
+
+                                            <Badge v-if="containers.length > 1" class="shrink-0" :text="asset.container_title" />
+                                        </div>
+                                    </td>
+
+                                    <td class="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400" v-text="asset.size" />
+                                    <td class="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400" v-text="asset.dimensions" />
+                                    <td class="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400" v-text="asset.dpi" />
+                                    <td v-if="showsSavings" class="px-4 py-2.5 whitespace-nowrap">
+                                        <template v-if="asset.compression">
+                                            <Button
+                                                v-if="asset.compression.compressible && canCompress"
+                                                size="sm"
+                                                :href="compressLink(asset)"
+                                                :text="__('asset-usage::messages.compress.button', { percent: Math.round(asset.compression.savings) })"
+                                            />
+                                            <Badge
+                                                v-else-if="asset.compression.compressible"
+                                                color="green"
+                                                :text="savingsLabel(asset.compression.savings)"
+                                            />
+                                            <!-- Links to the before and after page, which is where the original can be put back. -->
+                                            <Badge
+                                                v-else-if="asset.compression.status === 'compressed'"
+                                                color="green"
+                                                :href="canCompress ? compressLink(asset) : null"
+                                                :title="canCompress ? __('asset-usage::messages.compress.view') : null"
+                                                :text="asset.compression.savings
+                                                    ? `${__('asset-usage::messages.compress.compressed_badge')} (${savingsLabel(asset.compression.savings)})`
+                                                    : __('asset-usage::messages.compress.compressed_badge')"
+                                            />
+                                            <!-- Below the threshold, but still a saving. -->
+                                            <span
+                                                v-else-if="asset.compression.status === 'ok' && Math.round(asset.compression.savings) >= 1"
+                                                class="text-gray-500 dark:text-gray-400"
+                                                :title="__('asset-usage::messages.compress.below_threshold_tooltip', { threshold: compression?.threshold })"
+                                                v-text="savingsLabel(asset.compression.savings)"
+                                            />
+                                            <span
+                                                v-else-if="asset.compression.status === 'ok'"
+                                                class="text-gray-500 dark:text-gray-400"
+                                                :title="__('asset-usage::messages.compress.no_saving_tooltip')"
+                                                v-text="__('asset-usage::messages.compress.no_saving')"
+                                            />
+                                            <Badge
+                                                v-else-if="asset.compression.status === 'too_large'"
+                                                color="orange"
+                                                :text="__('asset-usage::messages.compress.too_large')"
+                                                :title="__('asset-usage::messages.compress.too_large_tooltip', { width: asset.compression.width, height: asset.compression.height })"
+                                            />
+                                            <Badge
+                                                v-else-if="asset.compression.status === 'unsupported'"
+                                                :text="__('asset-usage::messages.compress.unsupported')"
+                                                :title="asset.compression.reason"
+                                            />
+                                            <Badge
+                                                v-else-if="asset.compression.status === 'error'"
+                                                color="red"
+                                                :text="__('asset-usage::messages.compress.failed')"
+                                                :title="asset.compression.reason"
+                                            />
+                                            <span
+                                                v-else
+                                                class="text-gray-400 dark:text-gray-500"
+                                                :title="__('asset-usage::messages.compress.not_analyzed_tooltip')"
+                                                v-text="__('asset-usage::messages.compress.not_analyzed')"
+                                            />
+                                        </template>
+                                    </td>
+                                    <td class="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400" v-text="asset.last_modified" />
+
+                                    <td class="px-4 py-2.5 whitespace-nowrap">
+                                        <!-- Without a current index a count of 0 means "not checked", not "unused". -->
+                                        <Badge v-if="index.stale" :text="__('asset-usage::messages.index.not_ready')" />
+                                        <Badge
+                                            v-else-if="asset.count === 0"
+                                            color="orange"
+                                            :text="__('asset-usage::messages.filters.unused')"
+                                        />
+                                        <Button
+                                            v-else
+                                            size="sm"
+                                            variant="ghost"
+                                            class="-ms-3"
+                                            :icon-append="isExpanded(asset.id) ? 'chevron-up' : 'chevron-down'"
+                                            :aria-expanded="isExpanded(asset.id)"
+                                            :text="__n('asset-usage::messages.used_count', asset.count, { count: asset.count })"
+                                            @click="toggleExpanded(asset.id)"
+                                        />
+                                    </td>
+
+                                    <td v-if="deletes" class="px-4 py-2.5 text-end">
+                                        <Button
+                                            v-if="!asset.blocker"
+                                            size="sm"
+                                            variant="ghost"
+                                            icon="trash"
+                                            icon-only
+                                            :title="__('asset-usage::messages.delete.action')"
+                                            :aria-label="__('asset-usage::messages.delete.action')"
+                                            @click="confirmDelete([asset])"
+                                        />
+                                    </td>
+                                </tr>
+
+                                <tr v-if="isExpanded(asset.id)" class="border-b border-gray-200 last:border-b-0 dark:border-gray-700">
+                                    <td v-if="deletes" />
+                                    <!-- Indented past the thumbnail, so the list lines up with the file name. -->
+                                    <td :colspan="columns.length + (deletes ? 1 : 0)" class="pe-4 pb-3 ps-17">
+                                        <UsageList :usages="asset.usages" :site-titles="siteTitles" :multisite="multisite" />
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </Card>
+
+                <PanelFooter v-if="meta && meta.last_page > 1">
+                    <Pagination
+                        :class="{ 'pointer-events-none opacity-60': busy }"
+                        :resource-meta="meta"
+                        show-totals
+                        show-page-links
+                        :show-per-page-selector="false"
+                        @page-selected="goToPage"
+                    />
+                </PanelFooter>
+            </Panel>
+
+            <div class="mt-6 border-t border-gray-200 pt-4 text-center dark:border-gray-700">
+                <Text
+                    as="p"
+                    class="mx-auto max-w-2xl"
+                    size="sm"
+                    variant="subtle"
+                    :text="__('asset-usage::messages.not_scanned')"
+                />
+
+                <Text
+                    as="p"
+                    class="mx-auto mt-2 max-w-2xl"
+                    size="sm"
+                    variant="subtle"
+                    :text="__('asset-usage::messages.disclaimer')"
+                />
+
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {{ __('asset-usage::messages.made_by') }}
+                    <a
+                        class="text-blue-600 hover:underline dark:text-blue-400"
+                        href="https://statamic.com/creators/key-agency"
+                        target="_blank"
+                        rel="noopener"
+                    >Key Agency</a>
+                    <span class="mx-1" aria-hidden="true">·</span>
+                    <a
+                        class="text-blue-600 hover:underline dark:text-blue-400"
+                        href="https://github.com/keyagency"
+                        target="_blank"
+                        rel="noopener"
+                    >GitHub</a>
+                    <span class="mx-1" aria-hidden="true">·</span>
+                    <a
+                        class="text-blue-600 hover:underline dark:text-blue-400"
+                        href="https://statamic.com/addons/key-agency/asset-usage"
+                        target="_blank"
+                        rel="noopener"
+                    >Statamic Marketplace</a>
+                </p>
+            </div>
         </template>
 
         <ConfirmationModal

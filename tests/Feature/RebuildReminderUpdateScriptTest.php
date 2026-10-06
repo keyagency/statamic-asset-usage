@@ -137,4 +137,19 @@ class RebuildReminderUpdateScriptTest extends TestCase
         $this->assertTrue($config['scanned_types']['blueprints']);
         $this->assertTrue($config['scanned_types']['entries']);
     }
+
+    /**
+     * PHP doesn't require a comma after the last setting, so a hand-edited
+     * config may end without one. The result still has to parse.
+     */
+    #[Test]
+    public function a_last_setting_without_a_comma_still_gives_a_valid_config()
+    {
+        $this->publish("<?php\n\nreturn [\n\n    'containers' => '*'\n\n];\n");
+
+        $this->runScript();
+
+        $this->assertSame('*', $this->config()['containers']);
+        $this->assertSame(['auto_update' => 30, 'manual' => 7], $this->config()['rebuild_reminder_days']);
+    }
 }

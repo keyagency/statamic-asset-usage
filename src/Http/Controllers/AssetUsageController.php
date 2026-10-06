@@ -5,8 +5,16 @@ namespace KeyAgency\AssetUsage\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
+use KeyAgency\AssetUsage\Compression\Analyzer;
+use KeyAgency\AssetUsage\Compression\Backups;
+use KeyAgency\AssetUsage\Compression\CompressionResult;
+use KeyAgency\AssetUsage\Compression\Requirements;
+use KeyAgency\AssetUsage\Compression\Status;
 use KeyAgency\AssetUsage\Http\Controllers\Concerns\AuthorizesAssetUsage;
 use KeyAgency\AssetUsage\Jobs\BuildIndex;
+use KeyAgency\AssetUsage\Log\AssetLog;
+use KeyAgency\AssetUsage\Log\DeletionSource;
+use KeyAgency\AssetUsage\Support\ImageDensity;
 use KeyAgency\AssetUsage\Support\NavIcon;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
@@ -27,8 +35,11 @@ class AssetUsageController extends CpController
 
     private const PER_PAGE = 25;
 
-    /** The orders the overview can be sorted in. The first one is the default. */
-    private const SORTS = ['name_asc', 'name_desc', 'used', 'unused', 'newest', 'oldest'];
+    /** The columns the overview can be sorted by. The first one is the default. */
+    private const SORTS = ['path', 'size', 'resolution', 'dpi', 'savings', 'last_modified', 'usage'];
+
+    /** Built on first use; a request only needs it for the compression column. */
+    private ?Analyzer $analyzer = null;
 
     /**
      * How many assets one "delete all unused" request will remove. A cleanup can
@@ -42,7 +53,28 @@ class AssetUsageController extends CpController
     {
         $this->authorizeView();
 
+        return $this->page('usage');
+    }
+
+    /**
+     * The same overview, narrowed down to the images that can get smaller and
+     * without the parts that are only about cleaning up unused assets.
+     */
+    public function compressionPage()
+    {
+        $this->authorizeView();
+
+        abort_unless(Settings::compressionEnabled(), 404);
+
+        return $this->page('compression');
+    }
+
+    private function page(string $view)
+    {
         return Inertia::render('asset-usage::AssetUsage', [
+            'view' => $view,
+            'usageUrl' => cp_route('asset-usage.index'),
+            'compressionPageUrl' => cp_route('asset-usage.compression'),
             'icon' => NavIcon::svg(),
             'multisite' => Site::hasMultiple(),
             'canDelete' => $this->canDelete(),
@@ -60,7 +92,12 @@ class AssetUsageController extends CpController
                 ->map(fn ($site) => ['handle' => $site->handle(), 'title' => $site->name()])
                 ->values()
                 ->all(),
-            'minimumAgeInDays' => Settings::minimumAgeInDays(),
+            'compressionEnabled' => Settings::compressionEnabled(),
+            'canCompress' => Settings::compressionEnabled() && $this->canCompress(),
+            'analyzeUrl' => cp_route('asset-usage.compress.analyze'),
+            'compressionStatusUrl' => cp_route('asset-usage.compress.status'),
+            'compressUrl' => cp_route('asset-usage.compress.show'),
+            'logUrl' => cp_route('asset-usage.log'),
         ]);
     }
 
@@ -77,9 +114,16 @@ class AssetUsageController extends CpController
         $unused = Unused::make($store);
         $index = $unused->index();
 
+        $ids = $this->filter($request, $unused->containers(), $index);
+
+        if (in_array($compression = $request->input('compression'), ['all', 'compressible', 'compressed'], true)) {
+            $ids = $this->byCompression($ids, $compression);
+        }
+
         $ids = $this->sort(
-            $this->filter($request, $unused->containers(), $index),
+            $ids,
             $request->input('sort'),
+            $request->input('order') === 'desc',
             $index
         );
 
@@ -110,6 +154,10 @@ class AssetUsageController extends CpController
                  * hydrated, so they can still turn up as skipped on delete.
                  */
                 'unused_total' => count($this->unusedIds($request, $unused, $index)),
+                'deletions' => (new AssetLog)->deletionTotals((new AssetLog)->visibleTo(User::current())),
+                'compression' => Settings::compressionEnabled()
+                    ? (Requirements::available() ? Status::make($this->analyzer())->toArray() : Status::unavailable())
+                    : null,
             ],
         ];
     }
@@ -252,7 +300,7 @@ class AssetUsageController extends CpController
                 continue;
             }
 
-            $asset->delete();
+            DeletionSource::during(DeletionSource::TOOLS, fn () => $asset->delete());
             $deleted++;
         }
 
@@ -324,12 +372,12 @@ class AssetUsageController extends CpController
 
     /**
      * Order a filtered set of ids. Path order is applied first, so that it is
-     * also the tie-breaker within an equal usage count, because usort is stable.
+     * also the tie-breaker within equal values, because usort is stable.
      *
      * @param  string[]  $ids
      * @return string[]
      */
-    private function sort(array $ids, ?string $sort, UsageIndex $index): array
+    private function sort(array $ids, ?string $sort, bool $descending, UsageIndex $index): array
     {
         if (! in_array($sort, self::SORTS, true)) {
             $sort = self::SORTS[0];
@@ -340,33 +388,51 @@ class AssetUsageController extends CpController
 
         usort($ids, fn (string $a, string $b) => strnatcasecmp($paths[$a], $paths[$b]));
 
-        return match ($sort) {
-            'name_desc' => array_reverse($ids),
-            'used' => $this->sortByCount($ids, $index, descending: true),
-            'unused' => $this->sortByCount($ids, $index, descending: false),
-            'newest' => $this->sortByDate($ids, descending: true),
-            'oldest' => $this->sortByDate($ids, descending: false),
-            default => $ids,
+        if ($sort === 'path') {
+            return $descending ? array_reverse($ids) : $ids;
+        }
+
+        $values = match ($sort) {
+            'usage' => array_combine($ids, array_map(fn (string $id) => $index->countFor($id), $ids)),
+            'size' => $this->assetValues($ids, fn ($asset) => $asset->size()),
+            'last_modified' => $this->assetValues($ids, fn ($asset) => $asset->lastModified()->timestamp),
+            'resolution' => $this->assetValues($ids, fn ($asset) => $asset->isImage() && $asset->width() ? $asset->width() * $asset->height() : null),
+            'dpi' => $this->assetValues($ids, fn ($asset) => $asset->isImage() ? ImageDensity::for($asset) : null),
+            'savings' => $this->assetValues($ids, fn ($asset) => $this->savings($asset, $this->compressionRecord($asset))),
         };
+
+        // Assets without a value, such as the resolution of a PDF, go last in either direction.
+        usort($ids, function (string $a, string $b) use ($values, $descending) {
+            $first = $values[$a] ?? null;
+            $second = $values[$b] ?? null;
+
+            if ($first === null || $second === null) {
+                return ($first === null) <=> ($second === null);
+            }
+
+            return $descending ? $second <=> $first : $first <=> $second;
+        });
+
+        return $ids;
     }
 
     /**
-     * Unlike the other orders this one has to hydrate the assets. The query
-     * can't sort or pluck by date on both drivers: the Stache orders
+     * Unlike usage and path these have to hydrate the assets. The query can't
+     * sort or pluck by date or size on both drivers: the Stache orders
      * `last_modified` wrongly, and the eloquent driver's pluck skips the mapping
-     * to its `meta` column. Name order stays the tie-breaker, as usort is stable.
+     * to its `meta` column.
      *
      * Whole containers are fetched rather than narrowed with `whereIn`, which on
      * the eloquent driver means one bound parameter per asset and runs into the
      * database's limit on a large container.
      *
      * @param  string[]  $ids
-     * @return string[]
+     * @return array<string, int|null>
      */
-    private function sortByDate(array $ids, bool $descending): array
+    private function assetValues(array $ids, callable $value): array
     {
         $wanted = array_flip($ids);
-        $timestamps = [];
+        $values = [];
 
         $handles = array_unique(array_map(fn (string $id) => Reference::parse($id)?->container, $ids));
 
@@ -377,29 +443,12 @@ class AssetUsageController extends CpController
 
             foreach ($container->queryAssets()->get() as $asset) {
                 if (isset($wanted[$asset->id()])) {
-                    $timestamps[$asset->id()] = $asset->lastModified()->timestamp;
+                    $values[$asset->id()] = $value($asset);
                 }
             }
         }
 
-        usort($ids, fn (string $a, string $b) => $descending
-            ? ($timestamps[$b] ?? 0) <=> ($timestamps[$a] ?? 0)
-            : ($timestamps[$a] ?? 0) <=> ($timestamps[$b] ?? 0));
-
-        return $ids;
-    }
-
-    /**
-     * @param  string[]  $ids
-     * @return string[]
-     */
-    private function sortByCount(array $ids, UsageIndex $index, bool $descending): array
-    {
-        usort($ids, fn (string $a, string $b) => $descending
-            ? $index->countFor($b) <=> $index->countFor($a)
-            : $index->countFor($a) <=> $index->countFor($b));
-
-        return $ids;
+        return $values;
     }
 
     private function pathFor(string $id): string
@@ -426,13 +475,111 @@ class AssetUsageController extends CpController
             'is_image' => $asset->isImage(),
             'extension' => $asset->extension(),
             'size' => Str::fileSizeForHumans($asset->size(), 0),
+            'dimensions' => $asset->isImage() && $asset->width() ? $asset->width().' × '.$asset->height() : null,
+            'dpi' => $asset->isImage() ? ImageDensity::for($asset) : null,
             'last_modified' => $asset->lastModified()->diffForHumans(),
             'count' => count($usages),
             'usages' => array_map(fn ($usage) => $usage->toArray() + [
                 'type_label' => __('asset-usage::messages.item_type.'.$usage->type),
             ], $usages),
             'blocker' => $unused->blocker($asset),
+            'compression' => $this->compression($asset),
         ];
+    }
+
+    /**
+     * What the compression column shows: nothing for files that can't be
+     * compressed, "not analysed" when there is no current result.
+     */
+    private function compression($asset): ?array
+    {
+        if (! Settings::compressionEnabled() || ! Analyzer::applies($asset) || ! Requirements::available()) {
+            return null;
+        }
+
+        $record = $this->compressionRecord($asset);
+        $backups = new Backups;
+        $savings = $this->savings($asset, $record);
+
+        return [
+            'analyzed' => $record !== null,
+            'status' => $record['status'] ?? null,
+            'savings' => $savings,
+            'compressible' => ($record['status'] ?? null) === CompressionResult::OK && $savings !== null && $savings >= Settings::compressionThreshold(),
+            'before' => isset($record['before_bytes']) ? Str::fileSizeForHumans($record['before_bytes'], 1) : null,
+            'after' => isset($record['after_bytes']) ? Str::fileSizeForHumans($record['after_bytes'], 1) : null,
+            'width' => $record['before_width'] ?? null,
+            'height' => $record['before_height'] ?? null,
+            'reason' => $record['reason'] ?? null,
+            'has_backup' => $backups->has($asset),
+        ];
+    }
+
+    /**
+     * The compression page's list: images that can get smaller, images this
+     * addon compressed, or both.
+     *
+     * "Can get smaller" is read from the stored analysis, checked against the
+     * current settings but not the file version, which would mean hydrating
+     * every asset. A file replaced since shows up until its new analysis
+     * lands, and its row then says it isn't compressible. "Compressed" comes
+     * from the log, so it still holds once the kept original has been pruned.
+     *
+     * @param  string[]  $ids
+     * @return string[]
+     */
+    private function byCompression(array $ids, string $mode): array
+    {
+        if (! Settings::compressionEnabled() || ! Requirements::available()) {
+            return [];
+        }
+
+        $fingerprint = $this->analyzer()->compressor()->fingerprint();
+        $records = $this->analyzer()->store()->records();
+        $threshold = Settings::compressionThreshold();
+
+        $compressed = array_flip(array_column(array_filter(
+            (new AssetLog)->entries(AssetLog::COMPRESSED),
+            fn (array $entry) => $entry['restored_at'] === null
+        ), 'asset_id'));
+
+        return array_values(array_filter($ids, function (string $id) use ($records, $fingerprint, $threshold, $compressed, $mode) {
+            $record = $records[$id] ?? null;
+
+            $compressible = $record
+                && ($record['settings'] ?? null) === $fingerprint
+                && ($record['status'] ?? null) === CompressionResult::OK
+                && ($record['savings'] ?? 0) >= $threshold;
+
+            return match ($mode) {
+                'compressible' => $compressible,
+                'compressed' => isset($compressed[$id]),
+                default => $compressible || isset($compressed[$id]),
+            };
+        }));
+    }
+
+    /**
+     * What the Saving column shows and sorts on. A file this addon compressed
+     * has no saving left to offer, so it shows what compressing it saved.
+     */
+    private function savings($asset, ?array $record): ?float
+    {
+        if (($record['status'] ?? null) === CompressionResult::COMPRESSED) {
+            return (new Backups)->savings($asset);
+        }
+
+        return $record['savings'] ?? null;
+    }
+
+    private function compressionRecord($asset): ?array
+    {
+        return Analyzer::applies($asset) && Requirements::available() ? $this->analyzer()->fresh($asset) : null;
+    }
+
+    private function analyzer(): Analyzer
+    {
+        return $this->analyzer ??= Analyzer::make();
     }
 
     private function indexState(IndexStore $store): array

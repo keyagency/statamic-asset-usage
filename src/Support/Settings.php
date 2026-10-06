@@ -121,4 +121,66 @@ final class Settings
     {
         return max(0, (int) config('statamic.asset-usage.minimum_age_in_days', 0));
     }
+
+    public static function compressionEnabled(): bool
+    {
+        return (bool) self::compression('enabled', true);
+    }
+
+    public static function compressionThreshold(): int
+    {
+        // At least 1, so an image that would not get smaller is never offered.
+        return max(1, min(100, (int) self::compression('threshold_percent', 1)));
+    }
+
+    public static function compressionMaxDimension(): int
+    {
+        return max(1, (int) self::compression('max_dimension', 3840));
+    }
+
+    public static function compressionDpi(): int
+    {
+        return max(1, (int) self::compression('dpi', 72));
+    }
+
+    public static function jpgQuality(): int
+    {
+        return max(1, min(100, (int) self::compression('jpg_quality', 82)));
+    }
+
+    public static function webpQuality(): int
+    {
+        return max(1, min(100, (int) self::compression('webp_quality', 80)));
+    }
+
+    public static function pngQuality(): string
+    {
+        return (string) self::compression('png_quality', '70-90');
+    }
+
+    public static function pngquantBinary(): ?string
+    {
+        $binary = self::compression('pngquant_binary');
+
+        return is_string($binary) && $binary !== '' ? $binary : null;
+    }
+
+    /** Null when originals are kept forever. */
+    public static function keepOriginalsDays(): ?int
+    {
+        $days = self::compression('keep_originals_days', 30);
+
+        return $days === null ? null : max(0, (int) $days);
+    }
+
+    /**
+     * Read per sub-key with its own default, for the same reason as
+     * `rebuildReminderDays()`: Laravel merges the key as a whole.
+     */
+    private static function compression(string $key, mixed $default = null): mixed
+    {
+        $configured = config('statamic.asset-usage.compression');
+
+        return is_array($configured) && array_key_exists($key, $configured) ? $configured[$key] : $default;
+    }
 }
