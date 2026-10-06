@@ -33,6 +33,7 @@ return [
         'view' => 'Visualizzare l’utilizzo degli asset',
         'delete' => 'Eliminare gli asset non usati',
         'compress' => 'Comprimere le immagini',
+        'log' => 'Visualizzare il registro',
     ],
 
     'index' => [
@@ -188,6 +189,20 @@ return [
         'compressed_badge' => 'Compressa',
         'already_compressed' => 'Questa immagine è già stata compressa con le impostazioni attuali. Comprimerla di nuovo la renderebbe solo un po’ più leggera ogni volta, perdendo un po’ di qualità.',
         'confirm_file' => ':file: :before → :after',
+        'editor_not_analyzed' => 'Non ancora analizzata. Le nuove immagini vengono analizzate subito dopo il caricamento.',
+        'all' => 'Comprimi tutte',
+        'all_confirm_title' => '{1} Comprimere 1 immagine?|[2,*] Comprimere :count immagini?',
+        'all_confirm' => '{1} L’immagine viene sostituita dalla versione compressa senza che tu la confronti prima. Diventa più leggera di :size.|[2,*] Ogni immagine viene sostituita dalla versione compressa senza che tu le confronti prima. Insieme diventano più leggere di :size.',
+        'all_scope' => 'Riguarda ogni immagine che può diventare più leggera entro i filtri attuali, comprese quelle nelle altre pagine.',
+        'all_keep' => 'Gli originali vengono conservati fino al :date. Puoi ripristinare ogni immagine separatamente.',
+        'all_keep_forever' => 'Gli originali vengono conservati. Puoi ripristinare ogni immagine separatamente.',
+        'all_icc' => '{1} 1 di queste immagini ha un profilo colore incorporato che la versione compressa non mantiene, quindi i colori possono cambiare leggermente.|[2,*] :count di queste immagini hanno un profilo colore incorporato che la versione compressa non mantiene, quindi i colori possono cambiare leggermente.',
+        'all_stay' => 'Tieni aperta questa pagina finché non ha finito. Se esci prima, le immagini già compresse restano compresse e le altre restano come sono.',
+        'all_progress' => 'Compressione delle immagini: :done di :count',
+        'all_stop' => 'Interrompi',
+        'all_done' => '{0} Nessuna immagine è stata compressa.|{1} 1 immagine compressa, :size in meno.|[2,*] :count immagini compresse, :size in meno in totale.',
+        'all_failed_more' => '{1} Non è stato possibile comprimere un’altra immagine.|[2,*] Non è stato possibile comprimere altre :count immagini.',
+        'all_file_changed' => 'Il file sul disco non corrisponde a quanto registrato da Statamic, quindi è stato saltato.',
     ],
 
     'log' => [

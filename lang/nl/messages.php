@@ -33,6 +33,7 @@ return [
         'view' => 'Assetgebruik bekijken',
         'delete' => 'Ongebruikte assets verwijderen',
         'compress' => 'Afbeeldingen comprimeren',
+        'log' => 'Logboek bekijken',
     ],
 
     'index' => [
@@ -188,6 +189,20 @@ return [
         'compressed_badge' => 'Gecomprimeerd',
         'already_compressed' => 'Deze afbeelding is al gecomprimeerd met de huidige instellingen. Opnieuw comprimeren maakt hem telkens maar iets kleiner en kost steeds wat kwaliteit.',
         'confirm_file' => ':file: :before → :after',
+        'editor_not_analyzed' => 'Nog niet geanalyseerd. Nieuwe afbeeldingen worden direct na het uploaden geanalyseerd.',
+        'all' => 'Alles comprimeren',
+        'all_confirm_title' => '{1} 1 afbeelding comprimeren?|[2,*] :count afbeeldingen comprimeren?',
+        'all_confirm' => '{1} De afbeelding wordt vervangen door de gecomprimeerde versie, zonder dat je die eerst vergelijkt. Hij wordt :size kleiner.|[2,*] Elke afbeelding wordt vervangen door de gecomprimeerde versie, zonder dat je ze eerst vergelijkt. Samen worden ze :size kleiner.',
+        'all_scope' => 'Dit gaat over elke afbeelding die kleiner kan binnen de huidige filters, ook die op andere pagina\'s.',
+        'all_keep' => 'De originelen worden bewaard tot :date. Je kunt elke afbeelding los terugzetten.',
+        'all_keep_forever' => 'De originelen worden bewaard. Je kunt elke afbeelding los terugzetten.',
+        'all_icc' => '{1} 1 van deze afbeeldingen heeft een ingesloten kleurprofiel dat de gecomprimeerde versie niet behoudt, dus de kleuren kunnen iets verschuiven.|[2,*] :count van deze afbeeldingen hebben een ingesloten kleurprofiel dat de gecomprimeerde versie niet behoudt, dus de kleuren kunnen iets verschuiven.',
+        'all_stay' => 'Houd deze pagina open tot het klaar is. Ga je eerder weg, dan blijven de afbeeldingen die al gecomprimeerd zijn gecomprimeerd en blijft de rest zoals hij is.',
+        'all_progress' => 'Afbeeldingen comprimeren: :done van :count',
+        'all_stop' => 'Stoppen',
+        'all_done' => '{0} Er zijn geen afbeeldingen gecomprimeerd.|{1} 1 afbeelding gecomprimeerd, :size kleiner.|[2,*] :count afbeeldingen gecomprimeerd, samen :size kleiner.',
+        'all_failed_more' => '{1} Nog 1 afbeelding kon niet gecomprimeerd worden.|[2,*] Nog :count afbeeldingen konden niet gecomprimeerd worden.',
+        'all_file_changed' => 'Het bestand op de schijf wijkt af van wat Statamic ervan weet, dus het is overgeslagen.',
     ],
 
     'log' => [

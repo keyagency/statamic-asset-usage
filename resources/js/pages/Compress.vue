@@ -3,7 +3,7 @@ import { Head, router } from '@statamic/cms/inertia'
 import { Alert, Button, ButtonGroup, Card, ConfirmationModal, Header, Icon, Text } from '@statamic/cms/ui'
 import CompareSideBySide from '../components/CompareSideBySide.vue'
 import CompareSlider from '../components/CompareSlider.vue'
-import { formatDate, mark, parts } from '../support/formatting.js'
+import { escapeHtml, formatDate, mark, parts } from '../support/formatting.js'
 
 /** Behind transparent PNGs, so black logos stay visible. */
 const BACKGROUNDS = {
@@ -199,7 +199,7 @@ export default {
                 .post(url, data)
                 .then(response => router.visit(response.data.redirect))
                 .catch(error => {
-                    this.$toast.error(error.response?.data?.message ?? error.message)
+                    this.$toast.error(escapeHtml(error.response?.data?.message ?? error.message))
                     this.working = false
                 })
                 .finally(() => {

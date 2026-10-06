@@ -12,7 +12,7 @@ A Statamic 6 Control Panel addon for cleaning up your asset containers. It shows
 - **A "Used" column in the asset browser**: a tick or a cross, so one glance tells you which files are orphans.
 - **A Used / Unused filter** in the browser.
 - **An overview under Tools**: filter by container, site, usage and path, sort by any column (name, size, resolution, DPI, saving, date or usage), expand any asset to see where it's used, and delete the ones nothing needs.
-- **Image compression**: images that can get smaller get a View compression button. A before and after page shows the result first, and the original is kept so it can be put back.
+- **Image compression**: images that can get smaller get a View compression button. A before and after page shows the result first, and the original is kept so it can be put back. Or compress them all at once, after a warning.
 - **A log** of every compression and every deleted asset, with who did it.
 - **`please` commands** for reporting, cleaning up and compressing from the CLI.
 
@@ -169,11 +169,13 @@ Every deletion is logged, from here or from anywhere else (see [The log](#the-lo
 
 Images that are far heavier than they need to be (photos straight from a camera, 300 DPI exports, PNGs saved without compression) can be compressed from the Tools page or the asset editor. Each image is scaled down to `max_dimension` (never enlarged), set to 72 DPI, stripped of metadata where the image library allows it, and saved again in the same format, at the same path, so every place it is used keeps working. JPG and WebP are re-encoded at the configured quality; PNGs go through [pngquant](https://pngquant.org) when the server has it, and are otherwise only resized and saved losslessly.
 
-The **Saving** column shows what each image would save. When an image gets any smaller (`threshold_percent`, 1% by default) it becomes a **View compression** button, which opens a page comparing the original and the result: on top of each other with a line you drag (or move with the arrow keys), or side by side, at fit, 100% or 200%. Nothing changes until you press **Compress** there and confirm. The same button shows up under **Compression** in the asset editor, for an image that can get smaller. Compressing keeps the original in `storage/statamic/asset-usage/originals` for `keep_originals_days`. The image then shows as **Compressed (−25%)**, measured against that original, and links back to the same page, where the original can be put back. It isn't offered again with the same settings, not even once its original is gone, because saving it again would only shave off another percent while losing quality. An original only belongs to the file it was taken from: once that file is replaced or uploaded anew, the old original is no longer offered. It is deleted with its asset and moves along when the asset is renamed or moved.
+The **Saving** column shows what each image would save. When an image gets any smaller (`threshold_percent`, 1% by default) it becomes a **View compression** button, which opens a page comparing the original and the result: on top of each other with a line you drag (or move with the arrow keys), or side by side, at fit, 100% or 200%. Nothing changes until you press **Compress** there and confirm. The asset editor has the same button under **Compression**, for an image that can get smaller. For every other image it says how it stands: not analysed yet, already compressed, below the threshold, or larger when saved again. Compressing keeps the original in `storage/statamic/asset-usage/originals` for `keep_originals_days`. The image then shows as **Compressed (−25%)**, measured against that original, and links back to the same page, where the original can be put back. It isn't offered again with the same settings, not even once its original is gone, because saving it again would only shave off another percent while losing quality. An original only belongs to the file it was taken from: once that file is replaced or uploaded anew, the old original is no longer offered. It is deleted with its asset and moves along when the asset is renamed or moved.
 
-Under **Tools > Asset Usage**, tabs (and the submenu) lead to a **Compression** page, the same overview showing the images that can get smaller and the ones the addon compressed (with a filter for either), largest saving first, and to the **Log**: every compression the addon made, by whom, before and after, and whether the original was put back, and every deleted asset (see below). The Compression page sums it up: "12 images · 70.6 MB → 13.3 MB (−81.1%) · 5 resized". Restored compressions stay in the log but no longer count.
+Under **Tools > Asset Usage**, tabs (and the submenu) lead to a **Compression** page for users with the Compress images permission, the same overview showing the images that can get smaller and the ones the addon compressed (with a filter for either), largest saving first, and to the **Log**, for users with View log: every compression the addon made, by whom, before and after, and whether the original was put back, and every deleted asset (see below). The Compression page sums it up: "12 images · 70.6 MB → 13.3 MB (−81.1%) · 5 resized". Restored compressions stay in the log but no longer count.
 
-The Overview keeps the Saving column, and a notice with a button to the Compression page when there is something to gain; everything else about compression lives on its own page.
+**Compress all** on the Compression page compresses every image that can get smaller within the current filters, after a warning that they are replaced without a before and after comparison. The page sends them a few at a time and shows how far it is, so it works on the `sync` queue too and no request runs into the time limit. Keep the page open until it is done; stopping or leaving halfway leaves the images compressed so far compressed and the rest as they were. Images that can't be compressed are skipped and reported.
+
+The Overview keeps the Saving column for everyone, and for users who may compress a notice with a button to the Compression page when there is something to gain; everything else about compression lives on its own page.
 
 ### When is it analysed?
 
@@ -194,11 +196,12 @@ The Compression page always says when the last analysis ran.
 - Statamic works with Intervention Image v3 and v4, and so does compression. Version 3 has no option to strip metadata, so with v3 and the Imagick driver an image keeps its EXIF data; GD drops it either way.
 - Re-saving an image that is already compressed harder than the configured quality would make it bigger. Those images get no button; the Saving column says No saving.
 - GIFs, SVGs and animated images are left alone.
+- Whether pngquant is found is part of the settings a result is made with. The web server and the command line (or a queue worker) can have a different PATH, as with MAMP or PHP-FPM; when only one of them finds pngquant, the results the other made count as out of date. Set `pngquant_binary` to its full path so both use the same one.
 - When the PHP extension of the configured driver is missing, the Compression page says so and compression stays off; nothing else breaks. Formats the driver can't handle (GD built without WebP, say) and a missing pngquant are mentioned there as well, and by `asset-usage:doctor`.
 
 ## The log
 
-**Tools > Asset Usage > Log** lists what happened to assets in the enabled containers, newest first, filtered by All, Compressed or Deleted:
+**Tools > Asset Usage > Log** lists what happened to assets in the enabled containers, newest first, filtered by All, Compressed or Deleted. It needs the **View log** permission:
 
 - **Compressions**: who, before and after, and whether the original was put back.
 - **Deletions**, wherever they happen: the Tools page, `asset-usage:unused --delete`, Statamic's own asset browser, another command or a front-end form. Each entry has who did it, the file size and dimensions, where it happened, and whether the asset was still used at that moment, which makes an accidental deletion easy to trace. The overview shows the total ("8 files deleted · 24.3 MB freed").
@@ -271,9 +274,10 @@ return [
 
 ## Permissions
 
-- **View asset usage**: the Tools pages: Overview, Compression and Log.
+- **View asset usage**: the Overview on the Tools page, Saving column included.
+- **View log**: the Log page, and the buttons and tab that lead to it.
 - **Delete unused assets**: the delete buttons on the Tools page and the endpoints behind them.
-- **Compress images**: the Analyse and Compress buttons, the before and after page, the Compression part of the asset editor and restoring an original. Replacing the file also needs Statamic's own edit and upload permissions for that container.
+- **Compress images**: the Compression page with its Analyse and Compress all buttons, the before and after page, the Compression part of the asset editor and restoring an original. Replacing the file also needs Statamic's own edit and upload permissions for that container.
 
 The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools pages do the same: they only list containers whose assets the user may view, the log and the compression counts included, and deleting also needs Statamic's own delete permission for that container.
 

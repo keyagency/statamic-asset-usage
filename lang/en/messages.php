@@ -33,6 +33,7 @@ return [
         'view' => 'View asset usage',
         'delete' => 'Delete unused assets',
         'compress' => 'Compress images',
+        'log' => 'View log',
     ],
 
     'index' => [
@@ -188,6 +189,20 @@ return [
         'compressed_badge' => 'Compressed',
         'already_compressed' => 'This image has already been compressed with the current settings. Compressing it again would only make it a little smaller each time while losing quality.',
         'confirm_file' => ':file: :before → :after',
+        'editor_not_analyzed' => 'Not analysed yet. New images are analysed right after uploading.',
+        'all' => 'Compress all',
+        'all_confirm_title' => '{1} Compress 1 image?|[2,*] Compress :count images?',
+        'all_confirm' => '{1} The image is replaced by its compressed version, without you comparing it first. It gets :size smaller.|[2,*] Each image is replaced by its compressed version, without you comparing them first. Together they get :size smaller.',
+        'all_scope' => 'This covers every image that can get smaller within the current filters, including the ones on other pages.',
+        'all_keep' => 'The originals are kept until :date. You can restore each image separately.',
+        'all_keep_forever' => 'The originals are kept. You can restore each image separately.',
+        'all_icc' => '{1} 1 of these images has an embedded colour profile that the compressed version does not keep, so its colours can shift slightly.|[2,*] :count of these images have an embedded colour profile that the compressed version does not keep, so their colours can shift slightly.',
+        'all_stay' => 'Keep this page open until it is done. If you leave earlier, the images compressed so far stay compressed and the rest stay as they are.',
+        'all_progress' => 'Compressing images: :done of :count',
+        'all_stop' => 'Stop',
+        'all_done' => '{0} No images were compressed.|{1} 1 image compressed, :size smaller.|[2,*] :count images compressed, :size smaller together.',
+        'all_failed_more' => '{1} 1 more image could not be compressed.|[2,*] :count more images could not be compressed.',
+        'all_file_changed' => 'The file on the disk differs from what Statamic has on record, so it was left alone.',
     ],
 
     'log' => [

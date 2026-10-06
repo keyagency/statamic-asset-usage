@@ -17,13 +17,14 @@ import {
     Select,
     Text,
 } from '@statamic/cms/ui'
+import CompressAll from '../components/CompressAll.vue'
 import CompressionCard from '../components/CompressionCard.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import MarkedText from '../components/MarkedText.vue'
 import PageTabs from '../components/PageTabs.vue'
 import RowCheckbox from '../components/RowCheckbox.vue'
 import UsageList from '../components/UsageList.vue'
-import { formatBytes, formatDate, mark, parts } from '../support/formatting.js'
+import { escapeHtml, formatBytes, formatDate, mark, parts } from '../support/formatting.js'
 
 /**
  * Stands in for "any site" in the filter. An option can't carry an empty
@@ -41,6 +42,7 @@ export default {
         Badge,
         Button,
         Card,
+        CompressAll,
         CompressionCard,
         ConfirmationModal,
         Description,
@@ -81,6 +83,9 @@ export default {
         analyzeUrl: String,
         compressionStatusUrl: String,
         compressUrl: String,
+        compressAllUrl: String,
+        compressBatchUrl: String,
+        keepOriginalsDays: Number,
         logUrl: String,
     },
 
@@ -110,6 +115,8 @@ export default {
             compression: null,
             startingAnalysis: false,
             compressionPoll: null,
+            /** A "Compress all" run is going, which holds back the other buttons. */
+            compressing: false,
         }
     },
 
@@ -242,7 +249,7 @@ export default {
         },
 
         busy() {
-            return this.loading || this.rebuilding || this.deleting
+            return this.loading || this.rebuilding || this.deleting || this.compressing
         },
 
         unusedTotal() {
@@ -350,7 +357,7 @@ export default {
             this.$axios
                 .post(this.rebuildUrl)
                 .then(response => {
-                    this.$toast.success(response.data.message)
+                    this.$toast.success(escapeHtml(response.data.message))
                     this.setIndex(response.data.index)
                     this.load()
                 })
@@ -516,9 +523,9 @@ export default {
                 .then(response => {
                     const errors = Object.values(response.data.errors ?? {})
 
-                    if (response.data.deleted > 0) this.$toast.success(response.data.message)
+                    if (response.data.deleted > 0) this.$toast.success(escapeHtml(response.data.message))
 
-                    errors.forEach(error => this.$toast.error(error))
+                    errors.forEach(error => this.$toast.error(escapeHtml(error)))
 
                     this.load()
                 })
@@ -584,8 +591,9 @@ export default {
             return this.sortDirection === 'asc' ? 'ascending' : 'descending'
         },
 
+        /** Escaped, because it always ends up in a toast. */
         errorMessage(error) {
-            return error.response?.data?.message ?? error.message
+            return escapeHtml(error.response?.data?.message ?? error.message)
         },
     },
 }
@@ -675,7 +683,7 @@ export default {
                 screens, where the button makes the row taller than the icon.
             -->
             <Alert
-                v-if="view === 'usage' && compression?.available && compression.compressible && !compression.analyzing"
+                v-if="view === 'usage' && compressionPageUrl && compression?.available && compression.compressible && !compression.analyzing"
                 class="mb-4 sm:items-center!"
             >
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -772,7 +780,7 @@ export default {
                     <span aria-hidden="true"> · </span>
                     <strong class="font-semibold" v-text="__('asset-usage::messages.log.freed', { size: formatBytes(meta.deletions.bytes) })" />
                 </span>
-                <Button size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
+                <Button v-if="logUrl" size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
             </p>
 
             <div v-if="deletes" class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -790,6 +798,18 @@ export default {
                     @click="confirmDeleteAllUnused"
                 />
             </div>
+
+            <CompressAll
+                v-if="view === 'compression' && canCompress"
+                :summary="meta?.compress_all"
+                :params="requestParams"
+                :all-url="compressAllUrl"
+                :batch-url="compressBatchUrl"
+                :keep-originals-days="keepOriginalsDays"
+                :disabled="busy || compression?.analyzing"
+                @start="compressing = true"
+                @finish="compressing = false; load()"
+            />
 
             <Text
                 v-if="!assets.length"

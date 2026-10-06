@@ -26,7 +26,7 @@ class LogController extends CpController
 
     public function index(Request $request)
     {
-        $this->authorizeView();
+        $this->authorizeLog();
 
         $type = in_array($request->input('type'), [AssetLog::COMPRESSED, AssetLog::DELETED], true)
             ? $request->input('type')
@@ -54,7 +54,7 @@ class LogController extends CpController
             'deletionTotals' => $log->deletionTotals($visible),
             'logUrl' => cp_route('asset-usage.log'),
             'usageUrl' => cp_route('asset-usage.index'),
-            'compressionPageUrl' => Settings::compressionEnabled() ? cp_route('asset-usage.compression') : null,
+            'compressionPageUrl' => Settings::compressionEnabled() && $this->canCompress() ? cp_route('asset-usage.compression') : null,
         ]);
     }
 

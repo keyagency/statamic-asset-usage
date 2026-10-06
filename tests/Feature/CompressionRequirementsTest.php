@@ -4,6 +4,7 @@ namespace KeyAgency\AssetUsage\Tests\Feature;
 
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use KeyAgency\AssetUsage\Compression\Analyzer;
 use KeyAgency\AssetUsage\Compression\CompressionResult;
 use KeyAgency\AssetUsage\Compression\Compressor;
 use KeyAgency\AssetUsage\Compression\Requirements;
@@ -43,9 +44,9 @@ class CompressionRequirementsTest extends TestCase
         Blink::forget('asset-usage-compression-requirements');
     }
 
-    private function editorMeta(): ?array
+    private function editorMeta(string $id = self::ID): ?array
     {
-        return Asset::find(self::ID)->blueprint()->field(InjectUsageField::HANDLE)->meta()['compression'];
+        return Asset::find($id)->blueprint()->field(InjectUsageField::HANDLE)->meta()['compression'];
     }
 
     #[Test]
@@ -112,13 +113,18 @@ class CompressionRequirementsTest extends TestCase
     {
         $this->actingAs($this->superUser());
 
-        // Not analysed yet, so there is nothing to offer.
-        $this->assertNull($this->editorMeta());
+        // Not analysed yet, which the editor says rather than showing nothing.
+        $meta = $this->editorMeta();
+
+        $this->assertSame('not_analyzed', $meta['state']);
+        $this->assertFalse($meta['compressible']);
+        $this->assertStringContainsString('asset-usage/compress', $meta['url']);
 
         AnalyzeAllCompression::dispatch();
 
         $meta = $this->editorMeta();
 
+        $this->assertSame('compressible', $meta['state']);
         $this->assertTrue($meta['compressible']);
         $this->assertGreaterThan(20, $meta['savings']);
         $this->assertFalse($meta['has_backup']);
@@ -136,10 +142,83 @@ class CompressionRequirementsTest extends TestCase
 
         $meta = $this->editorMeta();
 
+        $this->assertSame('restorable', $meta['state']);
         $this->assertFalse($meta['compressible']);
         $this->assertTrue($meta['has_backup']);
         $this->assertNotNull($meta['expires_at']);
         $this->assertGreaterThan(0, $meta['compressed']['savings']);
+    }
+
+    /**
+     * An image that was checked shows the outcome too, so an upload that has
+     * nothing to gain doesn't look like one that was never checked.
+     */
+    #[Test]
+    public function the_asset_editor_says_when_compressing_would_not_help()
+    {
+        Storage::disk('assets')->put('img/small.jpg', Images::jpeg(100, 100, quality: 30));
+
+        $this->actingAs($this->superUser());
+        AnalyzeAllCompression::dispatch();
+
+        // Already squeezed harder than the configured quality, so re-encoding only makes it bigger.
+        $meta = $this->editorMeta('assets::img/small.jpg');
+
+        $this->assertSame('larger', $meta['state']);
+        $this->assertFalse($meta['compressible']);
+        $this->assertLessThan(0, $meta['savings']);
+
+        config(['statamic.asset-usage.compression.threshold_percent' => 99]);
+
+        $meta = $this->editorMeta();
+
+        $this->assertSame('below_threshold', $meta['state']);
+        $this->assertSame(99, $meta['threshold']);
+        $this->assertGreaterThan(0, $meta['savings']);
+    }
+
+    /**
+     * Once the original is pruned there is nothing to put back, and the image
+     * is still not offered again.
+     */
+    #[Test]
+    public function the_asset_editor_says_an_image_was_compressed_after_its_original_is_gone()
+    {
+        $this->actingAs($this->superUser());
+        AnalyzeAllCompression::dispatch();
+
+        $version = $this->get(cp_route('asset-usage.compress.show', ['asset' => self::ID]))->viewData('page')['props']['asset']['version'];
+        $this->postJson(cp_route('asset-usage.compress.store'), ['asset' => self::ID, 'version' => $version])->assertOk();
+
+        $this->travel(31)->days();
+        $this->artisan('statamic:asset-usage:prune-originals')->assertSuccessful();
+
+        $meta = $this->editorMeta();
+
+        $this->assertSame('compressed', $meta['state']);
+        $this->assertFalse($meta['has_backup']);
+        $this->assertNull($meta['compressed']);
+    }
+
+    #[Test]
+    public function the_asset_editor_says_when_an_image_is_too_large_to_compress()
+    {
+        Storage::disk('assets')->put('img/huge.jpg', Images::jpegHeader(20000, 20000));
+        $limit = ini_get('memory_limit');
+
+        ini_set('memory_limit', (string) max(512 * 1024 * 1024, memory_get_usage(true) + 64 * 1024 * 1024));
+
+        try {
+            Analyzer::make()->analyze([Asset::find('assets::img/huge.jpg')]);
+        } finally {
+            ini_set('memory_limit', $limit);
+        }
+
+        $this->actingAs($this->superUser());
+        $meta = $this->editorMeta('assets::img/huge.jpg');
+
+        $this->assertSame('too_large', $meta['state']);
+        $this->assertSame([20000, 20000], [$meta['width'], $meta['height']]);
     }
 
     #[Test]

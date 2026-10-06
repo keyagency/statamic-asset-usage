@@ -67,10 +67,12 @@ class AssetUsage extends Fieldtype
     }
 
     /**
-     * What the editor offers under the usage: a Compress button for an image
-     * that can get smaller, or a way back to the original of one that was
-     * compressed. Only for users who may replace the file, and null when there
-     * is nothing to offer, so most assets show nothing extra.
+     * What the editor shows under the usage, for every image this addon can
+     * compress: the saving with a way to the before and after page, a way
+     * back to the original of one that was compressed, or why there is
+     * nothing to gain. Also before the analysis has run, so an image that
+     * was never checked doesn't look like one with nothing to gain. Only for
+     * users who may replace the file.
      */
     private function compression(Asset $asset): ?array
     {
@@ -87,25 +89,56 @@ class AssetUsage extends Fieldtype
 
         $record = Analyzer::make()->fresh($asset);
         $backups = new Backups;
+        // Each check reads the kept original's details from disk, so once, and the rest only when there is one.
+        $hasBackup = $backups->has($asset);
         $savings = $record['savings'] ?? null;
+        $threshold = Settings::compressionThreshold();
         $compressible = ($record['status'] ?? null) === CompressionResult::OK
             && $savings !== null
-            && $savings >= Settings::compressionThreshold();
-
-        if (! $compressible && ! $backups->has($asset)) {
-            return null;
-        }
+            && $savings >= $threshold;
 
         return [
+            'state' => $this->compressionState($record, $compressible, $hasBackup),
             'compressible' => $compressible,
             'savings' => $savings !== null ? (int) round($savings) : null,
+            'threshold' => $threshold,
             'before' => isset($record['before_bytes']) ? Str::fileSizeForHumans($record['before_bytes'], 1) : null,
             'after' => isset($record['after_bytes']) ? Str::fileSizeForHumans($record['after_bytes'], 1) : null,
-            'has_backup' => $backups->has($asset),
-            'compressed' => $backups->summary($asset),
-            'expires_at' => $backups->expiresAt($asset)?->toIso8601String(),
+            'width' => $record['before_width'] ?? null,
+            'height' => $record['before_height'] ?? null,
+            'reason' => $record['reason'] ?? null,
+            'has_backup' => $hasBackup,
+            'compressed' => $hasBackup ? $backups->summary($asset) : null,
+            'expires_at' => $hasBackup ? $backups->expiresAt($asset)?->toIso8601String() : null,
             'url' => cp_route('asset-usage.compress.show', ['asset' => $asset->id()]),
         ];
+    }
+
+    /**
+     * Which message the editor shows. A saving that rounds to 0% reads as no
+     * saving, the same as in the Saving column of the overview.
+     */
+    private function compressionState(?array $record, bool $compressible, bool $hasBackup): string
+    {
+        if ($compressible) {
+            return 'compressible';
+        }
+
+        if ($hasBackup) {
+            return 'restorable';
+        }
+
+        $savings = (int) round($record['savings'] ?? 0);
+
+        return match ($record['status'] ?? null) {
+            null => 'not_analyzed',
+            CompressionResult::OK => match (true) {
+                $savings >= 1 => 'below_threshold',
+                $savings <= -1 => 'larger',
+                default => 'no_saving',
+            },
+            default => $record['status'],
+        };
     }
 
     /**

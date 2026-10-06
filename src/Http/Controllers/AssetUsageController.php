@@ -58,11 +58,14 @@ class AssetUsageController extends CpController
 
     /**
      * The same overview, narrowed down to the images that can get smaller and
-     * without the parts that are only about cleaning up unused assets.
+     * without the parts that are only about cleaning up unused assets. Only
+     * for users who may compress: for anyone else it has nothing to do, and
+     * the Saving column on the overview already shows the numbers.
      */
     public function compressionPage()
     {
         $this->authorizeView();
+        $this->authorizeCompress();
 
         abort_unless(Settings::compressionEnabled(), 404);
 
@@ -74,7 +77,8 @@ class AssetUsageController extends CpController
         return Inertia::render('asset-usage::AssetUsage', [
             'view' => $view,
             'usageUrl' => cp_route('asset-usage.index'),
-            'compressionPageUrl' => cp_route('asset-usage.compression'),
+            // Null without the compress permission, which leaves out the tab and the notice that lead there.
+            'compressionPageUrl' => $this->canCompress() ? cp_route('asset-usage.compression') : null,
             'icon' => NavIcon::svg(),
             'multisite' => Site::hasMultiple(),
             'canDelete' => $this->canDelete(),
@@ -97,8 +101,27 @@ class AssetUsageController extends CpController
             'analyzeUrl' => cp_route('asset-usage.compress.analyze'),
             'compressionStatusUrl' => cp_route('asset-usage.compress.status'),
             'compressUrl' => cp_route('asset-usage.compress.show'),
-            'logUrl' => cp_route('asset-usage.log'),
+            'compressAllUrl' => cp_route('asset-usage.compress.all'),
+            'compressBatchUrl' => cp_route('asset-usage.compress.batch'),
+            'keepOriginalsDays' => Settings::keepOriginalsDays(),
+            // Null without the log permission, which leaves out the tab and the buttons that lead there.
+            'logUrl' => $this->canViewLog() ? cp_route('asset-usage.log') : null,
         ]);
+    }
+
+    /**
+     * The images "Compress all" goes through, which the page then sends in
+     * small batches (see CompressionController::batch()).
+     */
+    public function compressible(Request $request)
+    {
+        $this->authorizeCompress();
+
+        abort_unless(Settings::compressionEnabled(), 404);
+
+        $unused = Unused::make(new IndexStore);
+
+        return ['ids' => $this->compressibleIds($request, $unused, $unused->index())];
     }
 
     /**
@@ -155,6 +178,7 @@ class AssetUsageController extends CpController
                  */
                 'unused_total' => count($this->unusedIds($request, $unused, $index)),
                 'deletions' => (new AssetLog)->deletionTotals((new AssetLog)->visibleTo(User::current())),
+                'compress_all' => $this->compressAllSummary($request, $unused, $index),
                 'compression' => Settings::compressionEnabled()
                     ? (Requirements::available() ? Status::make($this->analyzer())->toArray() : Status::unavailable())
                     : null,
@@ -271,6 +295,38 @@ class AssetUsageController extends CpController
             $ids,
             fn (string $id) => ! $unused->isIgnored(Reference::parse($id)?->path ?? '')
         ));
+    }
+
+    /**
+     * What "Compress all" covers: every image that can get smaller within the
+     * container and search filters. Like "delete all unused", it overrules the
+     * filter on what the list shows.
+     *
+     * @return string[]
+     */
+    private function compressibleIds(Request $request, Unused $unused, UsageIndex $index): array
+    {
+        return $this->byCompression($this->filter($request, $unused->containers(), $index, usage: 'all'), 'compressible');
+    }
+
+    /**
+     * For the button and the warning on the Compression page. Only there, and
+     * only for users who may compress.
+     */
+    private function compressAllSummary(Request $request, Unused $unused, UsageIndex $index): ?array
+    {
+        if (! $request->has('compression') || ! $this->canCompress() || ! Settings::compressionEnabled() || ! Requirements::available()) {
+            return null;
+        }
+
+        $records = $this->analyzer()->store()->records();
+        $ids = $this->compressibleIds($request, $unused, $index);
+
+        return [
+            'count' => count($ids),
+            'savable_bytes' => array_sum(array_map(fn (string $id) => $records[$id]['before_bytes'] - $records[$id]['after_bytes'], $ids)),
+            'icc_lost' => count(array_filter($ids, fn (string $id) => $records[$id]['icc_lost'] ?? false)),
+        ];
     }
 
     /**

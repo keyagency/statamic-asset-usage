@@ -33,6 +33,8 @@ class ServiceProvider extends AddonServiceProvider
 
     public const PERMISSION_COMPRESS = 'compress assets';
 
+    public const PERMISSION_LOG = 'view asset log';
+
     // Statamic would publish a second copy to config/asset-usage.php; we merge and publish our own below.
     protected $config = false;
 
@@ -111,6 +113,8 @@ class ServiceProvider extends AddonServiceProvider
                         ->label(__('asset-usage::messages.permissions.delete')),
                     Permission::make(self::PERMISSION_COMPRESS)
                         ->label(__('asset-usage::messages.permissions.compress')),
+                    Permission::make(self::PERMISSION_LOG)
+                        ->label(__('asset-usage::messages.permissions.log')),
                 ]);
         });
     }
@@ -126,9 +130,9 @@ class ServiceProvider extends AddonServiceProvider
             $item->children(array_values(array_filter([
                 $nav->item(__('asset-usage::messages.nav.usage'))->route('asset-usage.index')->can(self::PERMISSION_VIEW),
                 Settings::compressionEnabled()
-                    ? $nav->item(__('asset-usage::messages.nav.compression'))->route('asset-usage.compression')->can(self::PERMISSION_VIEW)
+                    ? $nav->item(__('asset-usage::messages.nav.compression'))->route('asset-usage.compression')->can(self::PERMISSION_COMPRESS)
                     : null,
-                $nav->item(__('asset-usage::messages.nav.log'))->route('asset-usage.log')->can(self::PERMISSION_VIEW),
+                $nav->item(__('asset-usage::messages.nav.log'))->route('asset-usage.log')->can(self::PERMISSION_LOG),
             ])));
         });
     }

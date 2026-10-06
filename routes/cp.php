@@ -28,6 +28,8 @@ Route::prefix('asset-usage')->name('asset-usage.')->group(function () {
         Route::get('image', [CompressionController::class, 'image'])->name('image');
         Route::post('/', [CompressionController::class, 'store'])->name('store');
         Route::post('restore', [CompressionController::class, 'restore'])->name('restore');
+        Route::get('all', [AssetUsageController::class, 'compressible'])->name('all');
+        Route::post('batch', [CompressionController::class, 'batch'])->name('batch');
         Route::post('analyze', [CompressionController::class, 'analyze'])->name('analyze');
         Route::get('status', [CompressionController::class, 'status'])->name('status');
     });

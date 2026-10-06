@@ -33,6 +33,7 @@ return [
         'view' => 'Ver el uso de assets',
         'delete' => 'Eliminar assets sin usar',
         'compress' => 'Comprimir imágenes',
+        'log' => 'Ver el registro',
     ],
 
     'index' => [
@@ -188,6 +189,20 @@ return [
         'compressed_badge' => 'Comprimida',
         'already_compressed' => 'Esta imagen ya se comprimió con los ajustes actuales. Volver a comprimirla solo la reduciría un poco cada vez, perdiendo algo de calidad.',
         'confirm_file' => ':file: :before → :after',
+        'editor_not_analyzed' => 'Aún no analizada. Las imágenes nuevas se analizan justo después de subirlas.',
+        'all' => 'Comprimir todas',
+        'all_confirm_title' => '{1} ¿Comprimir 1 imagen?|[2,*] ¿Comprimir :count imágenes?',
+        'all_confirm' => '{1} La imagen se reemplaza por su versión comprimida sin que la compares antes. Queda :size más pequeña.|[2,*] Cada imagen se reemplaza por su versión comprimida sin que las compares antes. En total quedan :size más pequeñas.',
+        'all_scope' => 'Esto incluye todas las imágenes que pueden ser más pequeñas dentro de los filtros actuales, también las de otras páginas.',
+        'all_keep' => 'Los originales se conservan hasta el :date. Puedes restaurar cada imagen por separado.',
+        'all_keep_forever' => 'Los originales se conservan. Puedes restaurar cada imagen por separado.',
+        'all_icc' => '{1} 1 de estas imágenes tiene un perfil de color incrustado que la versión comprimida no conserva, así que sus colores pueden cambiar ligeramente.|[2,*] :count de estas imágenes tienen un perfil de color incrustado que la versión comprimida no conserva, así que sus colores pueden cambiar ligeramente.',
+        'all_stay' => 'Mantén esta página abierta hasta que termine. Si la dejas antes, las imágenes ya comprimidas siguen comprimidas y el resto queda como está.',
+        'all_progress' => 'Comprimiendo imágenes: :done de :count',
+        'all_stop' => 'Detener',
+        'all_done' => '{0} No se ha comprimido ninguna imagen.|{1} 1 imagen comprimida, :size menos.|[2,*] :count imágenes comprimidas, :size menos en total.',
+        'all_failed_more' => '{1} No se pudo comprimir 1 imagen más.|[2,*] No se pudieron comprimir :count imágenes más.',
+        'all_file_changed' => 'El archivo en el disco no coincide con lo que Statamic tiene registrado, así que se ha omitido.',
     ],
 
     'log' => [

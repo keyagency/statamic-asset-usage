@@ -33,6 +33,7 @@ return [
         'view' => 'Voir l’utilisation des assets',
         'delete' => 'Supprimer les assets inutilisés',
         'compress' => 'Compresser les images',
+        'log' => 'Voir le journal',
     ],
 
     'index' => [
@@ -188,6 +189,20 @@ return [
         'compressed_badge' => 'Compressée',
         'already_compressed' => 'Cette image a déjà été compressée avec les réglages actuels. La compresser à nouveau ne la rendrait qu’un peu plus légère à chaque fois, au prix d’un peu de qualité.',
         'confirm_file' => ':file : :before → :after',
+        'editor_not_analyzed' => 'Pas encore analysée. Les nouvelles images sont analysées juste après l’envoi.',
+        'all' => 'Tout compresser',
+        'all_confirm_title' => '{1} Compresser 1 image ?|[2,*] Compresser :count images ?',
+        'all_confirm' => '{1} L’image est remplacée par sa version compressée, sans que vous la compariez d’abord. Elle devient :size plus légère.|[2,*] Chaque image est remplacée par sa version compressée, sans que vous les compariez d’abord. Ensemble, elles deviennent :size plus légères.',
+        'all_scope' => 'Cela concerne chaque image qui peut devenir plus légère dans les filtres actuels, y compris celles des autres pages.',
+        'all_keep' => 'Les originaux sont conservés jusqu’au :date. Vous pouvez restaurer chaque image séparément.',
+        'all_keep_forever' => 'Les originaux sont conservés. Vous pouvez restaurer chaque image séparément.',
+        'all_icc' => '{1} 1 de ces images contient un profil colorimétrique intégré que la version compressée ne conserve pas, ses couleurs peuvent donc légèrement changer.|[2,*] :count de ces images contiennent un profil colorimétrique intégré que la version compressée ne conserve pas, leurs couleurs peuvent donc légèrement changer.',
+        'all_stay' => 'Gardez cette page ouverte jusqu’à la fin. Si vous la quittez avant, les images déjà compressées le restent et les autres restent telles quelles.',
+        'all_progress' => 'Compression des images : :done sur :count',
+        'all_stop' => 'Arrêter',
+        'all_done' => '{0} Aucune image n’a été compressée.|{1} 1 image compressée, :size de moins.|[2,*] :count images compressées, :size de moins au total.',
+        'all_failed_more' => '{1} 1 autre image n’a pas pu être compressée.|[2,*] :count autres images n’ont pas pu être compressées.',
+        'all_file_changed' => 'Le fichier sur le disque ne correspond pas à ce que Statamic a enregistré, il a donc été ignoré.',
     ],
 
     'log' => [

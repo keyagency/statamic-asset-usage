@@ -32,6 +32,16 @@ export function formatBytes(bytes) {
     return `${number} ${units[unit]}`
 }
 
+const HTML_ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }
+
+/**
+ * For text that contains something users control, such as a file name, on
+ * its way into a toast: Statamic's toasts render their message as HTML.
+ */
+export function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, char => HTML_ENTITIES[char])
+}
+
 const OPEN = '\u0001'
 const CLOSE = '\u0002'
 

@@ -41,23 +41,59 @@ export default {
             return __n('asset-usage::messages.used_count', this.count, { count: this.count })
         },
 
-        /** Set server-side only when there is something to offer this user. */
+        /** Set server-side for every image this user may compress, null otherwise. */
         compression() {
             return this.meta.compression ?? null
         },
 
+        /** Only a saving gets the default colour; every other outcome is a side note. */
         compressionText() {
             const compression = this.compression
 
-            if (compression.compressible) {
-                return __('asset-usage::messages.compress.editor_savings', {
-                    percent: compression.savings,
-                    before: compression.before,
-                    after: compression.after,
-                })
+            switch (compression.state) {
+                case 'compressible':
+                    return __('asset-usage::messages.compress.editor_savings', {
+                        percent: compression.savings,
+                        before: compression.before,
+                        after: compression.after,
+                    })
+                case 'restorable':
+                    return this.restoreText
+                case 'below_threshold':
+                    return __('asset-usage::messages.compress.below_threshold', {
+                        percent: compression.savings,
+                        threshold: compression.threshold,
+                    })
+                case 'larger':
+                    return __('asset-usage::messages.compress.growth', { percent: Math.abs(compression.savings) })
+                case 'no_saving':
+                    return __('asset-usage::messages.compress.no_saving_tooltip')
+                case 'compressed':
+                    return __('asset-usage::messages.compress.already_compressed')
+                case 'too_large':
+                    return __('asset-usage::messages.compress.too_large_tooltip', {
+                        width: compression.width,
+                        height: compression.height,
+                    })
+                case 'not_analyzed':
+                    return __('asset-usage::messages.compress.editor_not_analyzed')
+                default:
+                    return __('asset-usage::messages.compress.cannot_compress', { reason: compression.reason ?? '' })
             }
+        },
 
-            return this.restoreText
+        /** The before and after page analyses an image that wasn't yet, and can still compress one below the threshold. */
+        compressionButton() {
+            switch (this.compression.state) {
+                case 'compressible':
+                case 'below_threshold':
+                case 'not_analyzed':
+                    return __('asset-usage::messages.compress.view_preview')
+                case 'restorable':
+                    return __('asset-usage::messages.compress.view')
+                default:
+                    return null
+            }
         },
 
         /** For an image compressed before: what that saved, against the kept original. */
@@ -129,18 +165,19 @@ export default {
 
             <div class="flex flex-col items-start gap-2">
                 <div class="space-y-0.5">
-                    <p v-if="!compression.compressible && compressedText.length" class="text-sm text-gray-900 dark:text-gray-50">
+                    <p v-if="compression.state === 'restorable' && compressedText.length" class="text-sm text-gray-900 dark:text-gray-50">
                         <template v-for="(part, i) in compressedText" :key="i">
                             <span v-if="part.marked" class="font-medium text-green-700 dark:text-green-400" v-text="part.text" />
                             <template v-else>{{ part.text }}</template>
                         </template>
                     </p>
-                    <Text as="p" size="sm" :variant="compression.compressible ? 'default' : 'subtle'" :text="compressionText" />
+                    <Text as="p" size="sm" :variant="compression.state === 'compressible' ? 'default' : 'subtle'" :text="compressionText" />
                 </div>
                 <Button
+                    v-if="compressionButton"
                     size="sm"
                     :href="compression.url"
-                    :text="compression.compressible ? __('asset-usage::messages.compress.view_preview') : __('asset-usage::messages.compress.view')"
+                    :text="compressionButton"
                 />
             </div>
         </div>

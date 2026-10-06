@@ -195,13 +195,34 @@ class AssetLogTest extends TestCase
         Asset::find('assets::docs/manual.pdf')->delete();
         Asset::find('private::secret/plan.pdf')->delete();
 
-        Role::make('viewer')->addPermission(['access cp', 'view asset usage', 'view assets assets'])->save();
+        Role::make('viewer')->addPermission(['access cp', 'view asset usage', 'view asset log', 'view assets assets'])->save();
         $viewer = tap(User::make()->email('robin@example.com')->assignRole('viewer'))->save();
 
         $props = $this->actingAs($viewer)->get(cp_route('asset-usage.log'))->assertOk()->viewData('page')['props'];
 
         $this->assertSame(['docs/manual.pdf'], array_column($props['entries'], 'path'));
         $this->assertSame(1, $props['deletionTotals']['count']);
+    }
+
+    /**
+     * Who deleted or compressed what is not for everyone who may see the
+     * usage, so the log has a permission of its own.
+     */
+    #[Test]
+    public function the_log_needs_a_permission_of_its_own()
+    {
+        Role::make('viewer')->addPermission(['access cp', 'view asset usage', 'view assets assets'])->save();
+        $viewer = tap(User::make()->email('robin@example.com')->assignRole('viewer'))->save();
+
+        $this->actingAs($viewer)->get(cp_route('asset-usage.log'))->assertForbidden();
+        // The Tools pages leave out the way to it, too.
+        $this->assertNull($this->get(cp_route('asset-usage.index'))->viewData('page')['props']['logUrl']);
+
+        Role::find('viewer')->addPermission('view asset log')->save();
+        $this->actingAs(User::find($viewer->id()));
+
+        $this->get(cp_route('asset-usage.log'))->assertOk();
+        $this->assertSame(cp_route('asset-usage.log'), $this->get(cp_route('asset-usage.index'))->viewData('page')['props']['logUrl']);
     }
 
     /**
@@ -220,7 +241,7 @@ class AssetLogTest extends TestCase
         $props = $this->get(cp_route('asset-usage.log'))->viewData('page')['props'];
         $this->assertSame('super@example.com', $props['entries'][0]['by']['name']);
 
-        Role::make('viewer')->addPermission(['access cp', 'view asset usage', 'view assets assets'])->save();
+        Role::make('viewer')->addPermission(['access cp', 'view asset usage', 'view asset log', 'view assets assets'])->save();
         $viewer = tap(User::make()->email('robin@example.com')->assignRole('viewer'))->save();
 
         $props = $this->actingAs($viewer)->get(cp_route('asset-usage.log'))->viewData('page')['props'];

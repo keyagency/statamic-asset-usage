@@ -35,6 +35,9 @@ class CompressionController extends CpController
         'webp' => 'image/webp',
     ];
 
+    /** The most images one batch of "Compress all" may hold. The page sends fewer. */
+    private const MAX_BATCH = 10;
+
     /**
      * The before and after page. Opening it changes nothing: the page asks for
      * the preview with a POST once it has loaded (see preview()), so a link or
@@ -160,6 +163,61 @@ class CompressionController extends CpController
         return ['redirect' => cp_route('asset-usage.compression')];
     }
 
+    /**
+     * One batch of "Compress all". The page sends a few images at a time, so
+     * a long run never meets the time limit of a single request, and it can
+     * show how far it is. An image that can't be compressed is reported and
+     * skipped; a failed backup ends the run, because every next one would
+     * fail the same way.
+     */
+    public function batch(Request $request)
+    {
+        $this->authorizeCompress();
+
+        abort_unless(Settings::compressionEnabled(), 404);
+        $this->abortUnlessAvailable();
+
+        $ids = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_BATCH],
+            'ids.*' => ['required', 'string'],
+        ])['ids'];
+
+        $service = CompressionService::make();
+        $user = User::current();
+        $compressed = 0;
+        $saved = 0;
+        $errors = [];
+        $halt = false;
+
+        foreach ($ids as $id) {
+            try {
+                $result = $this->compressOne($service, $id, $user);
+            } catch (BackupFailed $e) {
+                report($e);
+                $result = __('asset-usage::messages.compress.backup_failed');
+                $halt = true;
+            }
+
+            if (is_string($result)) {
+                $errors[] = ['path' => Reference::parse($id)?->path ?? $id, 'message' => $result];
+            } else {
+                $compressed++;
+                $saved += $result['before_bytes'] - $result['after_bytes'];
+            }
+
+            if ($halt) {
+                break;
+            }
+        }
+
+        return [
+            'compressed' => $compressed,
+            'saved_bytes' => $saved,
+            'errors' => $errors,
+            'halt' => $halt,
+        ];
+    }
+
     public function restore(Request $request)
     {
         $asset = $this->findCompressibleAsset($request);
@@ -217,14 +275,51 @@ class CompressionController extends CpController
         $this->abortUnlessAvailable();
 
         $id = $request->validate(['asset' => 'required|string'])['asset'];
-        $reference = Reference::parse($id);
 
-        abort_unless($reference && Containers::includes($reference->container), 404);
-        abort_unless($asset = Asset::find($id), 404);
-        abort_unless(Analyzer::applies($asset), 404);
+        abort_unless($asset = $this->findImage($id), 404);
         abort_unless(User::current()?->can('reupload', $asset), 403);
 
         return $asset;
+    }
+
+    /**
+     * One image of a batch, checked the same way as on the before and after
+     * page. Against the current version: there was no preview to keep to,
+     * and the size on the disk still catches a file Statamic's meta is behind.
+     *
+     * @return array|string the record of the file before it was replaced, or why it was skipped
+     *
+     * @throws BackupFailed
+     */
+    private function compressOne(CompressionService $service, string $id, $user): array|string
+    {
+        if (! $asset = $this->findImage($id)) {
+            return __('asset-usage::messages.errors.asset_missing');
+        }
+
+        if (! $user->can('reupload', $asset)) {
+            return __('statamic::error.unauthorized');
+        }
+
+        try {
+            return $service->compress($asset, Analyzer::version($asset), $user);
+        } catch (FileChanged) {
+            return __('asset-usage::messages.compress.all_file_changed');
+        } catch (NothingToCompress) {
+            return __('asset-usage::messages.compress.nothing_to_compress');
+        }
+    }
+
+    /** An image this addon compresses, in an enabled container. */
+    private function findImage(string $id)
+    {
+        $reference = Reference::parse($id);
+
+        if (! $reference || ! Containers::includes($reference->container) || ! $asset = Asset::find($id)) {
+            return null;
+        }
+
+        return Analyzer::applies($asset) ? $asset : null;
     }
 
     private function abortUnlessAvailable(): void

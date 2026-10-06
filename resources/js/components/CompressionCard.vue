@@ -96,7 +96,7 @@ export default {
             <p class="text-gray-700 dark:text-gray-300">
                 <CompressionTotals :totals="compression.log" />
             </p>
-            <Button class="shrink-0" size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
+            <Button v-if="logUrl" class="shrink-0" size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
         </div>
 
         <ul class="mt-4 space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-gray-700">

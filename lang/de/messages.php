@@ -33,6 +33,7 @@ return [
         'view' => 'Asset-Nutzung anzeigen',
         'delete' => 'Unbenutzte Assets löschen',
         'compress' => 'Bilder komprimieren',
+        'log' => 'Protokoll ansehen',
     ],
 
     'index' => [
@@ -188,6 +189,20 @@ return [
         'compressed_badge' => 'Komprimiert',
         'already_compressed' => 'Dieses Bild wurde bereits mit den aktuellen Einstellungen komprimiert. Erneutes Komprimieren macht es jedes Mal nur ein wenig kleiner und kostet etwas Qualität.',
         'confirm_file' => ':file: :before → :after',
+        'editor_not_analyzed' => 'Noch nicht analysiert. Neue Bilder werden direkt nach dem Hochladen analysiert.',
+        'all' => 'Alle komprimieren',
+        'all_confirm_title' => '{1} 1 Bild komprimieren?|[2,*] :count Bilder komprimieren?',
+        'all_confirm' => '{1} Das Bild wird durch die komprimierte Version ersetzt, ohne dass du es vorher vergleichst. Es wird :size kleiner.|[2,*] Jedes Bild wird durch die komprimierte Version ersetzt, ohne dass du sie vorher vergleichst. Zusammen werden sie :size kleiner.',
+        'all_scope' => 'Das betrifft jedes Bild, das innerhalb der aktuellen Filter kleiner werden kann, auch die auf anderen Seiten.',
+        'all_keep' => 'Die Originale werden bis :date aufbewahrt. Du kannst jedes Bild einzeln wiederherstellen.',
+        'all_keep_forever' => 'Die Originale werden aufbewahrt. Du kannst jedes Bild einzeln wiederherstellen.',
+        'all_icc' => '{1} 1 dieser Bilder hat ein eingebettetes Farbprofil, das die komprimierte Version nicht behält, daher können sich die Farben leicht verschieben.|[2,*] :count dieser Bilder haben ein eingebettetes Farbprofil, das die komprimierte Version nicht behält, daher können sich die Farben leicht verschieben.',
+        'all_stay' => 'Lass diese Seite geöffnet, bis alles fertig ist. Wenn du sie vorher verlässt, bleiben die bereits komprimierten Bilder komprimiert und der Rest bleibt, wie er ist.',
+        'all_progress' => 'Bilder werden komprimiert: :done von :count',
+        'all_stop' => 'Stoppen',
+        'all_done' => '{0} Es wurden keine Bilder komprimiert.|{1} 1 Bild komprimiert, :size kleiner.|[2,*] :count Bilder komprimiert, zusammen :size kleiner.',
+        'all_failed_more' => '{1} 1 weiteres Bild konnte nicht komprimiert werden.|[2,*] :count weitere Bilder konnten nicht komprimiert werden.',
+        'all_file_changed' => 'Die Datei auf dem Datenträger weicht von dem ab, was Statamic gespeichert hat, daher wurde sie übersprungen.',
     ],
 
     'log' => [

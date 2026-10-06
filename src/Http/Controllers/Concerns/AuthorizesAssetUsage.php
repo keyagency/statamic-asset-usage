@@ -22,6 +22,11 @@ trait AuthorizesAssetUsage
         $this->authorizePermission(ServiceProvider::PERMISSION_COMPRESS);
     }
 
+    protected function authorizeLog(): void
+    {
+        $this->authorizePermission(ServiceProvider::PERMISSION_LOG);
+    }
+
     protected function canDelete(): bool
     {
         return $this->hasPermission(ServiceProvider::PERMISSION_DELETE);
@@ -30,6 +35,11 @@ trait AuthorizesAssetUsage
     protected function canCompress(): bool
     {
         return $this->hasPermission(ServiceProvider::PERMISSION_COMPRESS);
+    }
+
+    protected function canViewLog(): bool
+    {
+        return $this->hasPermission(ServiceProvider::PERMISSION_LOG);
     }
 
     private function hasPermission(string $permission): bool

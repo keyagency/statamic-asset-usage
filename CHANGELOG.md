@@ -1,5 +1,17 @@
 # Release Notes
 
+## 1.3.1 (2026-10-06)
+
+### What's new
+- Compress all: a button on the Compression page that compresses every image that can get smaller, after a warning, with a progress bar.
+- New permission: View log. The Log page now needs it; give it to roles that should keep seeing the log.
+
+### What's improved
+- The Compression page is only there for users with the Compress images permission. Without it the page had nothing to do; the Saving column on the Overview stays.
+
+### What's fixed
+- The asset editor shows the Compression part for every image, also when compressing wouldn't help or the image wasn't analysed yet, instead of nothing.
+
 ## 1.3.0 (2026-10-06)
 
 ### What's new

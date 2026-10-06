@@ -230,6 +230,30 @@ class CompressionAnalysisTest extends TestCase
     }
 
     /**
+     * Without the compress permission there is nothing to do on the page, so
+     * the page and the ways to it are left out. The Saving column stays.
+     */
+    #[Test]
+    public function the_compression_page_is_for_users_who_may_compress()
+    {
+        Role::make('viewer')->addPermission(['access cp', 'view asset usage', 'view asset log', 'view assets assets'])->save();
+        $viewer = tap(User::make()->email('robin@example.com')->assignRole('viewer'))->save();
+
+        $this->actingAs($viewer)->get(cp_route('asset-usage.compression'))->assertForbidden();
+        $this->assertNull($this->get(cp_route('asset-usage.index'))->viewData('page')['props']['compressionPageUrl']);
+        $this->assertNull($this->get(cp_route('asset-usage.log'))->viewData('page')['props']['compressionPageUrl']);
+
+        $rows = collect($this->getJson(cp_route('asset-usage.assets'))->json('data'))->keyBy('path');
+        $this->assertNotNull($rows['img/heavy.jpg']['compression']);
+
+        Role::find('viewer')->addPermission('compress assets')->save();
+        $this->actingAs(User::find($viewer->id()));
+
+        $this->get(cp_route('asset-usage.compression'))->assertOk();
+        $this->assertSame(cp_route('asset-usage.compression'), $this->get(cp_route('asset-usage.index'))->viewData('page')['props']['compressionPageUrl']);
+    }
+
+    /**
      * Decided from the header, before the whole file is read: reading
      * something too big for the memory limit is a fatal error.
      */
