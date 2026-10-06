@@ -100,7 +100,7 @@ Every command starts with `php please asset-usage:`. Options belong to the comma
 
 ### `asset-usage:index`
 
-Rebuilds the whole usage index.
+Rebuilds the whole usage index, with a progress bar that counts the items as it scans them.
 
 | Option | |
 |---|---|
@@ -115,7 +115,7 @@ Lists the assets nothing uses, and can delete them.
 | `--container=main` | Only one container |
 | `--older-than=30` | Only assets last modified more than this many days ago |
 | `--ignore='*.pdf'` | Filename patterns to leave out, on top of the `ignore` config; repeat it for more |
-| `--json` | The paths as JSON instead of a table |
+| `--json` | The paths as JSON instead of a table, without progress bars |
 | `--fresh` | Rebuild the index first |
 | `--delete` | Delete the listed assets. Asks first, refuses to run against an out-of-date index, and re-checks every asset just before removing it |
 | `--force` | With `--delete`: don't ask for confirmation |
@@ -134,7 +134,7 @@ Above the per-container output it lists the content types actually being scanned
 
 ### `asset-usage:analyze`
 
-Test-compresses every image, for the Saving column and the Compression page.
+Test-compresses every image, for the Saving column and the Compression page, with a progress bar that moves on per image.
 
 | Option | |
 |---|---|
@@ -143,7 +143,7 @@ Test-compresses every image, for the Saving column and the Compression page.
 
 ### `asset-usage:prune-originals`
 
-Deletes the originals of compressed images once they are older than `keep_originals_days`. Runs daily on its own when the site runs Laravel's scheduler.
+Deletes the originals of compressed images once they are older than `keep_originals_days`. The image stays marked as compressed, so it isn't offered again. Files nothing can restore any more (an original whose details are missing, a copy that was never finished) are deleted after a day, also when originals are kept forever. Runs daily on its own when the site runs Laravel's scheduler.
 
 ### `asset-usage:log`
 
@@ -169,7 +169,7 @@ Every deletion is logged, from here or from anywhere else (see [The log](#the-lo
 
 Images that are far heavier than they need to be (photos straight from a camera, 300 DPI exports, PNGs saved without compression) can be compressed from the Tools page or the asset editor. Each image is scaled down to `max_dimension` (never enlarged), set to 72 DPI, stripped of metadata where the image library allows it, and saved again in the same format, at the same path, so every place it is used keeps working. JPG and WebP are re-encoded at the configured quality; PNGs go through [pngquant](https://pngquant.org) when the server has it, and are otherwise only resized and saved losslessly.
 
-The **Saving** column shows what each image would save. When an image gets any smaller (`threshold_percent`, 1% by default) it becomes a **View compression** button, which opens a page comparing the original and the result: on top of each other with a line you drag (or move with the arrow keys), or side by side, at fit, 100% or 200%. Nothing changes until you press **Compress** there and confirm. The same button shows up under **Compression** in the asset editor, for an image that can get smaller. Compressing keeps the original in `storage/statamic/asset-usage/originals` for `keep_originals_days`. The image then shows as **Compressed (−25%)**, measured against that original, and links back to the same page, where the original can be put back. It isn't offered again with the same settings, because saving it again would only shave off another percent while losing quality. An original only belongs to the file it was taken from: once that file is replaced or uploaded anew, the old original is no longer offered. It is deleted with its asset and moves along when the asset is renamed or moved.
+The **Saving** column shows what each image would save. When an image gets any smaller (`threshold_percent`, 1% by default) it becomes a **View compression** button, which opens a page comparing the original and the result: on top of each other with a line you drag (or move with the arrow keys), or side by side, at fit, 100% or 200%. Nothing changes until you press **Compress** there and confirm. The same button shows up under **Compression** in the asset editor, for an image that can get smaller. Compressing keeps the original in `storage/statamic/asset-usage/originals` for `keep_originals_days`. The image then shows as **Compressed (−25%)**, measured against that original, and links back to the same page, where the original can be put back. It isn't offered again with the same settings, not even once its original is gone, because saving it again would only shave off another percent while losing quality. An original only belongs to the file it was taken from: once that file is replaced or uploaded anew, the old original is no longer offered. It is deleted with its asset and moves along when the asset is renamed or moved.
 
 Under **Tools > Asset Usage**, tabs (and the submenu) lead to a **Compression** page, the same overview showing the images that can get smaller and the ones the addon compressed (with a filter for either), largest saving first, and to the **Log**: every compression the addon made, by whom, before and after, and whether the original was put back, and every deleted asset (see below). The Compression page sums it up: "12 images · 70.6 MB → 13.3 MB (−81.1%) · 5 resized". Restored compressions stay in the log but no longer count.
 
@@ -275,7 +275,7 @@ return [
 - **Delete unused assets**: the delete buttons on the Tools page and the endpoints behind them.
 - **Compress images**: the Analyse and Compress buttons, the before and after page, the Compression part of the asset editor and restoring an original. Replacing the file also needs Statamic's own edit and upload permissions for that container.
 
-The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools pages do the same: they only list containers whose assets the user may view, the log included, and deleting also needs Statamic's own delete permission for that container.
+The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools pages do the same: they only list containers whose assets the user may view, the log and the compression counts included, and deleting also needs Statamic's own delete permission for that container.
 
 The commands don't check permissions: whoever can run `php please` can use them.
 

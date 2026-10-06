@@ -6,22 +6,31 @@ use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Intervention\Image\Exceptions\NotSupportedException;
 use Intervention\Image\ImageManager;
-use Intervention\Image\Interfaces\ImageInterface;
+use Intervention\Image\Interfaces\DriverInterface;
+use Intervention\Image\Interfaces\ImageManagerInterface;
 use KeyAgency\AssetUsage\Compression\CompressionResult;
 use KeyAgency\AssetUsage\Compression\Compressor;
 use KeyAgency\AssetUsage\Compression\ImageManagers;
+use KeyAgency\AssetUsage\Tests\Support\FailingDriver;
 use KeyAgency\AssetUsage\Tests\Support\Images;
 use KeyAgency\AssetUsage\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
-use Stringable;
 use Symfony\Component\Process\ExecutableFinder;
 
 class CompressorTest extends TestCase
 {
     private function compressor($manager = null, ?string $pngquant = null, int $max = 3840): Compressor
     {
-        return new Compressor($manager ?? ImageManager::usingDriver(GdDriver::class), $max, 72, 82, 80, '70-90', $pngquant);
+        return new Compressor($manager ?? self::manager(GdDriver::class), $max, 72, 82, 80, '70-90', $pngquant);
+    }
+
+    /** Intervention v4 renamed withDriver() to usingDriver(), and Statamic allows both versions. */
+    private static function manager(string|DriverInterface $driver): ImageManagerInterface
+    {
+        return method_exists(ImageManager::class, 'usingDriver')
+            ? ImageManager::usingDriver($driver)
+            : ImageManager::withDriver($driver);
     }
 
     #[Test]
@@ -133,31 +142,18 @@ class CompressorTest extends TestCase
     #[Test]
     public function only_gd_counts_against_the_memory_limit()
     {
-        $this->assertTrue(ImageManagers::countsAgainstMemoryLimit(ImageManager::usingDriver(GdDriver::class)));
+        $this->assertTrue(ImageManagers::countsAgainstMemoryLimit(self::manager(GdDriver::class)));
 
         if (extension_loaded('imagick')) {
-            $this->assertFalse(ImageManagers::countsAgainstMemoryLimit(ImageManager::usingDriver(ImagickDriver::class)));
+            $this->assertFalse(ImageManagers::countsAgainstMemoryLimit(self::manager(ImagickDriver::class)));
         }
     }
 
     #[Test]
     public function a_driver_that_cannot_handle_the_image_makes_it_unsupported()
     {
-        $unsupported = new class(GdDriver::class) extends ImageManager
-        {
-            public function decodeBinary(string|Stringable $binary): ImageInterface
-            {
-                throw new NotSupportedException('No decoder for this format');
-            }
-        };
-
-        $broken = new class(GdDriver::class) extends ImageManager
-        {
-            public function decodeBinary(string|Stringable $binary): ImageInterface
-            {
-                throw new RuntimeException('Something broke');
-            }
-        };
+        $unsupported = self::manager(FailingDriver::throwing(new NotSupportedException('No decoder for this format')));
+        $broken = self::manager(FailingDriver::throwing(new RuntimeException('Something broke')));
 
         $jpeg = Images::jpeg(50, 50);
 
@@ -186,7 +182,7 @@ class CompressorTest extends TestCase
             $this->markTestSkipped('Imagick is not installed.');
         }
 
-        $result = $this->compressor(ImageManager::usingDriver(ImagickDriver::class))->compress(Images::png(50, 50, dpi: 300), 'png');
+        $result = $this->compressor(self::manager(ImagickDriver::class))->compress(Images::png(50, 50, dpi: 300), 'png');
 
         $this->assertSame(72, $result->afterDpi);
     }
@@ -201,8 +197,12 @@ class CompressorTest extends TestCase
         };
 
         $this->assertInstanceOf(GdDriver::class, $driver('gd'));
-        $this->assertInstanceOf(GdDriver::class, $driver(['driver' => 'gd']));
         $this->assertInstanceOf(GdDriver::class, $driver(GdDriver::class));
+
+        // Glide 3.2, which goes with Intervention v3, has no array form; Glide breaks on it itself.
+        if (method_exists(ImageManager::class, 'usingDriver')) {
+            $this->assertInstanceOf(GdDriver::class, $driver(['driver' => 'gd']));
+        }
 
         if (extension_loaded('imagick')) {
             $this->assertInstanceOf(ImagickDriver::class, $driver('imagick'));

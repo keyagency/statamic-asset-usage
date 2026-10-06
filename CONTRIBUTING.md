@@ -77,11 +77,14 @@ Tests run against in-memory SQLite via Orchestra Testbench + `Statamic\Testing\A
 
 A few compression tests need the Imagick extension or the `pngquant` binary and are skipped without them. `vendor/bin/phpunit` runs on whichever `php` comes first in your PATH, which may not be the one with Imagick.
 
+On PHP 8.2 Composer installs Intervention Image v3 (with Glide 3), on newer PHP versions v4, so CI tests both and your local run most likely covers only v4. Compression tests have to work with either; AGENTS.md lists what differs and how to run the tests against v3.
+
 ## Conventions
 
 - Console output is English, always, written as literals in the command itself. It ends up in bug reports, and a diagnostic in the reporter's language is harder to read, not easier.
 - Other user-facing strings live in `lang/{locale}/messages.php` (English, Dutch, German, French, Spanish and Italian). Add keys to every locale and don't inline literals. `TranslationsTest` fails when a locale is missing a key, a plural segment or a placeholder. Related strings are grouped under their own array key (`index`, `filters`, `columns`, `delete`, `compress`, `log`, `nav`, `errors`, …) rather than prefixed.
 - Config is read through `Support\Settings`, not scattered `config()` calls.
+- A new config key needs an update script in `src/UpdateScripts/` that adds it to configs sites have already published. Its `isUpdatingTo()` version has to be the version you tag, or it never runs; AGENTS.md has the details.
 
 Five rules are easy to break; please preserve them:
 
