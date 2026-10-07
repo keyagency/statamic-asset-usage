@@ -151,27 +151,28 @@ class Backups
     }
 
     /**
-     * Remembers which version of the file compressing produced, and with which
-     * settings, so the analysis can tell its own output apart.
+     * Remembers which version of the file compressing produced, so the
+     * analysis can tell its own output apart.
      */
-    public function markCompressed(Asset $asset, string $version, string $fingerprint): void
+    public function markCompressed(Asset $asset, string $version): void
     {
         File::put($this->metaPath($asset), json_encode(array_merge($this->meta($asset), [
             'version' => $version,
-            'settings' => $fingerprint,
         ])));
     }
 
     /**
-     * Whether the file as it is now is what compressing with these settings
-     * produced. Read from the meta alone, which prune() leaves behind, so an
-     * image doesn't get offered again once its original is gone.
+     * Whether the file as it is now is what compressing produced. Read from
+     * the meta alone, which prune() leaves behind, so an image doesn't get
+     * offered again once its original is gone.
+     *
+     * Whatever the settings: encoding its own output again loses quality
+     * every time, and a change that has nothing to do with the image, such as
+     * the server finding pngquant, would otherwise offer every image again.
      */
-    public function producedCurrentFile(Asset $asset, string $version, string $fingerprint): bool
+    public function producedCurrentFile(Asset $asset, string $version): bool
     {
-        $meta = $this->meta($asset);
-
-        return ($meta['version'] ?? null) === $version && ($meta['settings'] ?? null) === $fingerprint;
+        return ($this->meta($asset)['version'] ?? null) === $version;
     }
 
     public function restore(Asset $asset): void

@@ -8,6 +8,7 @@ use KeyAgency\AssetUsage\Compression\Requirements;
 use KeyAgency\AssetUsage\Compression\Status;
 use KeyAgency\AssetUsage\Jobs\AnalyzeAllCompression;
 use KeyAgency\AssetUsage\Support\Settings;
+use KeyAgency\AssetUsage\Usage\Containers;
 use Statamic\Console\RunsInPlease;
 use Statamic\Facades\Asset;
 use Statamic\Support\Str;
@@ -18,6 +19,7 @@ class AnalyzeCommand extends Command
     use RunsInPlease;
 
     protected $signature = 'statamic:asset-usage:analyze
+        {--container= : Only analyse images in one asset container}
         {--force : Analyse images again even when their result is still current}
         {--queue : Dispatch the analysis to the queue instead of running it now}';
 
@@ -37,6 +39,20 @@ class AnalyzeCommand extends Command
             return self::FAILURE;
         }
 
+        $container = $this->option('container');
+
+        if ($container && ! Containers::isEnabled($container)) {
+            $this->components->error("The container [{$container}] is not enabled for this addon.");
+
+            return self::FAILURE;
+        }
+
+        if ($container && $this->option('queue')) {
+            $this->components->error('--queue analyses every container. Leave out --container to use it.');
+
+            return self::FAILURE;
+        }
+
         if ($this->option('queue')) {
             AnalyzeAllCompression::dispatch((bool) $this->option('force'));
 
@@ -46,12 +62,18 @@ class AnalyzeCommand extends Command
         }
 
         $analyzer = Analyzer::make();
-        $batches = AnalyzeAllCompression::batches();
+        $batches = AnalyzeAllCompression::batches($container);
         $total = array_sum(array_map('count', $batches));
 
-        $analyzer->store()->markAnalyzing($batches, $analyzer->compressor()->fingerprint());
+        /*
+         * One container is only part of the images, so the analysis as a whole
+         * keeps its date, its settings and the results of the other containers.
+         */
+        if (! $container) {
+            $analyzer->store()->markAnalyzing($batches, $analyzer->compressor()->fingerprint());
+        }
 
-        $this->components->info("Analysing {$total} images.");
+        $this->components->info(sprintf('Analysing %d %s.', $total, Str::plural('image', $total)));
 
         // Shown from the start and moved on per image, not per batch: one batch can be a whole small site.
         $bar = $this->output->createProgressBar($total);
@@ -63,10 +85,10 @@ class AnalyzeCommand extends Command
             try {
                 $assets = collect($ids)->map(fn (string $id) => Asset::find($id))->filter();
 
-                $analyzer->analyze($assets, (bool) $this->option('force'), $batch, fn () => $bar->advance());
+                $analyzer->analyze($assets, (bool) $this->option('force'), $container ? null : $batch, fn () => $bar->advance());
             } catch (Throwable $e) {
                 // Struck off anyway, so one bad batch can't leave the run "analysing".
-                $analyzer->store()->store([], $batch);
+                $container || $analyzer->store()->store([], $batch);
                 report($e);
                 $failed++;
             }

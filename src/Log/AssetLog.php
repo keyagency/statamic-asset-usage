@@ -80,14 +80,16 @@ class AssetLog
 
     /**
      * @param  array  $record  the analysis record of the preview that was written
+     * @param  string  $source  where it was compressed, see Source
      */
-    public function recordCompression(Asset $asset, array $record, $user = null): void
+    public function recordCompression(Asset $asset, array $record, $user = null, string $source = Source::TOOLS): void
     {
         $this->append([
             'type' => self::COMPRESSED,
             'asset_id' => $asset->id(),
             'container' => $asset->container()->handle(),
             'path' => $asset->path(),
+            'source' => $source,
             'before_bytes' => $record['before_bytes'],
             'after_bytes' => $record['after_bytes'],
             'before_width' => $record['before_width'] ?? null,
@@ -105,7 +107,7 @@ class AssetLog
 
     /**
      * @param  array  $details  what the asset was before it went: bytes, width, height, usage_count
-     * @param  string  $source  where it was deleted, see DeletionSource
+     * @param  string  $source  where it was deleted, see Source
      */
     public function recordDeletion(string $id, string $container, string $path, array $details, string $source, $user = null): void
     {

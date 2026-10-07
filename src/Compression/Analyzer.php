@@ -2,6 +2,7 @@
 
 namespace KeyAgency\AssetUsage\Compression;
 
+use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use Statamic\Contracts\Assets\Asset;
 use Throwable;
@@ -53,6 +54,31 @@ class Analyzer
         return $this->store->fresh($asset->id(), self::version($asset), $this->compressor->fingerprint());
     }
 
+    /**
+     * The images that can get smaller, which is what "Compress all" and the
+     * compress command go through. Read from the stored analysis against the
+     * current settings but not the file version, which would mean hydrating
+     * every asset; compressing checks the version image by image.
+     *
+     * @param  string[]  $ids
+     * @return string[]
+     */
+    public function compressible(array $ids): array
+    {
+        $records = $this->store->records();
+        $fingerprint = $this->compressor->fingerprint();
+        $threshold = Settings::compressionThreshold();
+
+        return array_values(array_filter($ids, function (string $id) use ($records, $fingerprint, $threshold) {
+            $record = $records[$id] ?? null;
+
+            return $record
+                && ($record['settings'] ?? null) === $fingerprint
+                && ($record['status'] ?? null) === CompressionResult::OK
+                && ($record['savings'] ?? 0) >= $threshold;
+        }));
+    }
+
     /** Enough of a file for its dimensions; the header sits at the very start. */
     private const HEADER_BYTES = 262144;
 
@@ -72,8 +98,8 @@ class Analyzer
             return CompressionResult::failed(CompressionResult::TOO_LARGE, (int) $asset->size(), 'Not enough memory to compress this image.', $width, $height);
         }
 
-        if ($this->backups->producedCurrentFile($asset, self::version($asset), $this->compressor->fingerprint())) {
-            return CompressionResult::failed(CompressionResult::COMPRESSED, (int) $asset->size(), 'Already compressed with the current settings.');
+        if ($this->backups->producedCurrentFile($asset, self::version($asset))) {
+            return CompressionResult::failed(CompressionResult::COMPRESSED, (int) $asset->size(), 'Already compressed by this addon.');
         }
 
         try {

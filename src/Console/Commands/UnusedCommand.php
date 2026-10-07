@@ -4,7 +4,7 @@ namespace KeyAgency\AssetUsage\Console\Commands;
 
 use Illuminate\Console\Command;
 use KeyAgency\AssetUsage\Console\Commands\Concerns\BuildsIndexWithProgress;
-use KeyAgency\AssetUsage\Log\DeletionSource;
+use KeyAgency\AssetUsage\Log\Source;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
@@ -170,7 +170,7 @@ class UnusedCommand extends Command
                 return;
             }
 
-            DeletionSource::during(DeletionSource::CLI, fn () => $asset->delete());
+            Source::during(Source::CLI, fn () => $asset->delete());
             $deleted++;
         });
 

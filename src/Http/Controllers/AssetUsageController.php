@@ -13,7 +13,7 @@ use KeyAgency\AssetUsage\Compression\Status;
 use KeyAgency\AssetUsage\Http\Controllers\Concerns\AuthorizesAssetUsage;
 use KeyAgency\AssetUsage\Jobs\BuildIndex;
 use KeyAgency\AssetUsage\Log\AssetLog;
-use KeyAgency\AssetUsage\Log\DeletionSource;
+use KeyAgency\AssetUsage\Log\Source;
 use KeyAgency\AssetUsage\Support\ImageDensity;
 use KeyAgency\AssetUsage\Support\NavIcon;
 use KeyAgency\AssetUsage\Support\Settings;
@@ -356,7 +356,7 @@ class AssetUsageController extends CpController
                 continue;
             }
 
-            DeletionSource::during(DeletionSource::TOOLS, fn () => $asset->delete());
+            Source::during(Source::TOOLS, fn () => $asset->delete());
             $deleted++;
         }
 
@@ -448,17 +448,24 @@ class AssetUsageController extends CpController
             return $descending ? array_reverse($ids) : $ids;
         }
 
+        // Lower groups go first in either direction; only the saving uses them.
+        $groups = [];
+
         $values = match ($sort) {
             'usage' => array_combine($ids, array_map(fn (string $id) => $index->countFor($id), $ids)),
             'size' => $this->assetValues($ids, fn ($asset) => $asset->size()),
             'last_modified' => $this->assetValues($ids, fn ($asset) => $asset->lastModified()->timestamp),
             'resolution' => $this->assetValues($ids, fn ($asset) => $asset->isImage() && $asset->width() ? $asset->width() * $asset->height() : null),
             'dpi' => $this->assetValues($ids, fn ($asset) => $asset->isImage() ? ImageDensity::for($asset) : null),
-            'savings' => $this->assetValues($ids, fn ($asset) => $this->savings($asset, $this->compressionRecord($asset))),
+            'savings' => $this->savingsValues($ids, $groups),
         };
 
         // Assets without a value, such as the resolution of a PDF, go last in either direction.
-        usort($ids, function (string $a, string $b) use ($values, $descending) {
+        usort($ids, function (string $a, string $b) use ($values, $groups, $descending) {
+            if ($group = ($groups[$a] ?? 0) <=> ($groups[$b] ?? 0)) {
+                return $group;
+            }
+
             $first = $values[$a] ?? null;
             $second = $values[$b] ?? null;
 
@@ -502,6 +509,29 @@ class AssetUsageController extends CpController
                     $values[$asset->id()] = $value($asset);
                 }
             }
+        }
+
+        return $values;
+    }
+
+    /**
+     * The saving per image, with the images that can get smaller put in a
+     * group of their own. A compressed image shows what compressing saved,
+     * which can be more than any image still has to gain, so sorting on the
+     * number alone would mix the two.
+     *
+     * @param  string[]  $ids
+     * @param  array<string, int>  $groups  filled with 0 for an image that can get smaller, 1 for the rest
+     * @return array<string, float|null>
+     */
+    private function savingsValues(array $ids, array &$groups): array
+    {
+        $values = [];
+
+        foreach ($this->assetValues($ids, fn ($asset) => $asset) as $id => $asset) {
+            $record = $this->compressionRecord($asset);
+            $values[$id] = $this->savings($asset, $record);
+            $groups[$id] = $this->isCompressible($record, $values[$id]) ? 0 : 1;
         }
 
         return $values;
@@ -556,12 +586,16 @@ class AssetUsageController extends CpController
         $record = $this->compressionRecord($asset);
         $backups = new Backups;
         $savings = $this->savings($asset, $record);
+        $compressible = $this->isCompressible($record, $savings);
 
         return [
             'analyzed' => $record !== null,
             'status' => $record['status'] ?? null,
             'savings' => $savings,
-            'compressible' => ($record['status'] ?? null) === CompressionResult::OK && $savings !== null && $savings >= Settings::compressionThreshold(),
+            'compressible' => $compressible,
+            // For the warning before compressing a selection, the same numbers "Compress all" shows.
+            'savable_bytes' => $compressible ? $record['before_bytes'] - $record['after_bytes'] : null,
+            'icc_lost' => (bool) ($record['icc_lost'] ?? false),
             'before' => isset($record['before_bytes']) ? Str::fileSizeForHumans($record['before_bytes'], 1) : null,
             'after' => isset($record['after_bytes']) ? Str::fileSizeForHumans($record['after_bytes'], 1) : null,
             'width' => $record['before_width'] ?? null,
@@ -590,28 +624,17 @@ class AssetUsageController extends CpController
             return [];
         }
 
-        $fingerprint = $this->analyzer()->compressor()->fingerprint();
-        $records = $this->analyzer()->store()->records();
-        $threshold = Settings::compressionThreshold();
+        $compressible = array_flip($this->analyzer()->compressible($ids));
 
         $compressed = array_flip(array_column(array_filter(
             (new AssetLog)->entries(AssetLog::COMPRESSED),
             fn (array $entry) => $entry['restored_at'] === null
         ), 'asset_id'));
 
-        return array_values(array_filter($ids, function (string $id) use ($records, $fingerprint, $threshold, $compressed, $mode) {
-            $record = $records[$id] ?? null;
-
-            $compressible = $record
-                && ($record['settings'] ?? null) === $fingerprint
-                && ($record['status'] ?? null) === CompressionResult::OK
-                && ($record['savings'] ?? 0) >= $threshold;
-
-            return match ($mode) {
-                'compressible' => $compressible,
-                'compressed' => isset($compressed[$id]),
-                default => $compressible || isset($compressed[$id]),
-            };
+        return array_values(array_filter($ids, fn (string $id) => match ($mode) {
+            'compressible' => isset($compressible[$id]),
+            'compressed' => isset($compressed[$id]),
+            default => isset($compressible[$id]) || isset($compressed[$id]),
         }));
     }
 
@@ -626,6 +649,12 @@ class AssetUsageController extends CpController
         }
 
         return $record['savings'] ?? null;
+    }
+
+    /** What gets the button in the Saving column: a current result that saves at least the threshold. */
+    private function isCompressible(?array $record, ?float $savings): bool
+    {
+        return ($record['status'] ?? null) === CompressionResult::OK && $savings !== null && $savings >= Settings::compressionThreshold();
     }
 
     private function compressionRecord($asset): ?array

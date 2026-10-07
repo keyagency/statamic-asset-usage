@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use KeyAgency\AssetUsage\Http\Controllers\Concerns\AuthorizesAssetUsage;
 use KeyAgency\AssetUsage\Log\AssetLog;
+use KeyAgency\AssetUsage\Log\Source;
 use KeyAgency\AssetUsage\Support\NavIcon;
 use KeyAgency\AssetUsage\Support\Settings;
 use Statamic\Facades\Asset;
@@ -60,7 +61,7 @@ class LogController extends CpController
 
     private function row(array $entry): array
     {
-        $entry['by'] = $this->person($entry['by'] ?? null);
+        $entry['by'] = $this->person($entry['by'] ?? null) ?? $this->commandLine($entry['source'] ?? null);
         $entry['restored_by'] = $this->person($entry['restored_by'] ?? null);
 
         if ($entry['type'] === AssetLog::DELETED) {
@@ -78,6 +79,17 @@ class LogController extends CpController
             'edit_url' => $asset?->editUrl(),
             'thumbnail' => $asset?->isImage() ? $asset->thumbnailUrl('small') : null,
         ];
+    }
+
+    /**
+     * Without a user, a command or a queued job is who did it. Outside the
+     * Control Panel nobody can be named, so that stays empty.
+     */
+    private function commandLine(?string $source): ?array
+    {
+        return in_array($source, [Source::CLI, Source::CONSOLE], true)
+            ? ['id' => null, 'name' => __('asset-usage::messages.log.by_command_line')]
+            : null;
     }
 
     /**

@@ -4,6 +4,7 @@ namespace KeyAgency\AssetUsage;
 
 use Illuminate\Console\Scheduling\Schedule;
 use KeyAgency\AssetUsage\Console\Commands\AnalyzeCommand;
+use KeyAgency\AssetUsage\Console\Commands\CompressCommand;
 use KeyAgency\AssetUsage\Console\Commands\DoctorCommand;
 use KeyAgency\AssetUsage\Console\Commands\IndexCommand;
 use KeyAgency\AssetUsage\Console\Commands\LogCommand;
@@ -60,6 +61,7 @@ class ServiceProvider extends AddonServiceProvider
 
     protected $commands = [
         AnalyzeCommand::class,
+        CompressCommand::class,
         DoctorCommand::class,
         IndexCommand::class,
         LogCommand::class,

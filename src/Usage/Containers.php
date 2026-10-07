@@ -55,6 +55,12 @@ final class Containers
         return $handles === null || in_array($handle, $handles);
     }
 
+    /** Unlike includes(), which says yes to any handle while every container is enabled, the container has to exist. */
+    public static function isEnabled(string $handle): bool
+    {
+        return self::enabled()->contains(fn ($container) => $container->handle() === $handle);
+    }
+
     /**
      * @return string[]
      */

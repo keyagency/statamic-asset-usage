@@ -3,15 +3,17 @@
 namespace KeyAgency\AssetUsage\Log;
 
 /**
- * Where a deletion happened, for the log. The addon's own delete paths say so
- * explicitly; anything else is told apart by the request it happens in.
+ * Where a deletion or a compression happened, for the log. The addon's own
+ * paths say so explicitly; a deletion anywhere else is told apart by the
+ * request it happens in. Compressions only happen on the Tools page and in
+ * the CLI.
  */
-final class DeletionSource
+final class Source
 {
-    /** The Tools page of this addon. */
+    /** The Tools page of this addon, and for a compression the before and after page. */
     public const TOOLS = 'tools';
 
-    /** `asset-usage:unused --delete`. */
+    /** `asset-usage:unused --delete`, or `asset-usage:compress` for a compression. */
     public const CLI = 'cli';
 
     /** Anywhere else in the Control Panel, such as Statamic's asset browser. */

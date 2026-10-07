@@ -4,7 +4,7 @@ namespace KeyAgency\AssetUsage\Listeners;
 
 use Illuminate\Events\Dispatcher;
 use KeyAgency\AssetUsage\Log\AssetLog;
-use KeyAgency\AssetUsage\Log\DeletionSource;
+use KeyAgency\AssetUsage\Log\Source;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\IndexStore;
 use Statamic\Events\AssetDeleted;
@@ -77,7 +77,7 @@ class LogAssetDeletion
             $asset->container()->handle(),
             $asset->path(),
             $details,
-            DeletionSource::current(),
+            Source::current(),
             User::current(),
         );
     }

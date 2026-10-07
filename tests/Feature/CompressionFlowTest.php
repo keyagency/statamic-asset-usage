@@ -178,6 +178,24 @@ class CompressionFlowTest extends TestCase
         $this->compress()->assertStatus(422);
     }
 
+    /**
+     * Not with other settings either: encoding its own output again loses
+     * quality whatever the settings, and whether the server finds pngquant,
+     * which only concerns PNGs, changes the settings of every image at once.
+     * Other settings start from the original, which can be put back.
+     */
+    #[Test]
+    public function an_image_it_compressed_is_not_offered_again_with_other_settings()
+    {
+        $this->compress()->assertOk();
+
+        config(['statamic.asset-usage.compression.jpg_quality' => 75]);
+        $this->assertSame('compressed', $this->props()['record']['status']);
+
+        config(['statamic.asset-usage.compression.pngquant_binary' => '/nonexistent/pngquant']);
+        $this->assertSame('compressed', $this->props()['record']['status']);
+    }
+
     #[Test]
     public function it_refuses_when_the_file_changed_after_the_preview()
     {
@@ -305,12 +323,12 @@ class CompressionFlowTest extends TestCase
     }
 
     #[Test]
-    public function compressing_twice_keeps_the_first_original()
+    public function compressing_again_is_refused_and_keeps_the_first_original()
     {
         $this->compress()->assertOk();
 
         config(['statamic.asset-usage.compression.max_dimension' => 100]);
-        $this->compress()->assertOk();
+        $this->compress()->assertStatus(422);
 
         $this->assertSame($this->original, File::get((new Backups)->path($this->asset())));
     }

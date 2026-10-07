@@ -215,7 +215,13 @@ export default {
 
                             <td class="px-4 py-2.5 whitespace-nowrap">
                                 <template v-if="entry.type === 'compressed'">
-                                    <span v-if="entry.restored_at" class="text-gray-600 dark:text-gray-400" v-text="restoredText(entry)" />
+                                    <!-- Only the command line is worth saying: every other compression happens on the Tools page. -->
+                                    <div
+                                        v-if="entry.source === 'cli'"
+                                        class="text-gray-600 dark:text-gray-400"
+                                        v-text="__('asset-usage::messages.log.compressed_via_cli')"
+                                    />
+                                    <div v-if="entry.restored_at" class="text-gray-600 dark:text-gray-400" v-text="restoredText(entry)" />
                                 </template>
                                 <template v-else>
                                     <div class="text-gray-600 dark:text-gray-400" v-text="__(`asset-usage::messages.log.sources.${entry.source}`)" />

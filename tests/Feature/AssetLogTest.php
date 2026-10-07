@@ -5,7 +5,7 @@ namespace KeyAgency\AssetUsage\Tests\Feature;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use KeyAgency\AssetUsage\Log\AssetLog;
-use KeyAgency\AssetUsage\Log\DeletionSource;
+use KeyAgency\AssetUsage\Log\Source;
 use KeyAgency\AssetUsage\Tests\Support\Images;
 use KeyAgency\AssetUsage\Tests\TestCase;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
@@ -51,6 +51,7 @@ class AssetLogTest extends TestCase
         $this->assertSame([600, 200], [$entries[0]['before_width'], $entries[0]['after_width']]);
         $this->assertSame(strlen(Storage::disk('assets')->get('img/heavy.jpg')), $entries[0]['after_bytes']);
         $this->assertSame($this->superUser()->id(), $entries[0]['by']['id']);
+        $this->assertSame(Source::TOOLS, $entries[0]['source']);
         $this->assertNull($entries[0]['restored_at']);
 
         $totals = (new AssetLog)->compressionTotals();
@@ -87,7 +88,7 @@ class AssetLogTest extends TestCase
 
         $this->assertSame('assets::docs/manual.pdf', $entry['asset_id']);
         $this->assertSame($size, $entry['bytes']);
-        $this->assertSame(DeletionSource::TOOLS, $entry['source']);
+        $this->assertSame(Source::TOOLS, $entry['source']);
         $this->assertSame(0, $entry['usage_count']);
         $this->assertSame($this->superUser()->id(), $entry['by']['id']);
         $this->assertSame(['count' => 1, 'bytes' => $size], (new AssetLog)->deletionTotals());
@@ -107,10 +108,27 @@ class AssetLogTest extends TestCase
 
         $entry = (new AssetLog)->entries(AssetLog::DELETED)[0];
 
-        $this->assertSame(DeletionSource::CONSOLE, $entry['source']);
+        $this->assertSame(Source::CONSOLE, $entry['source']);
         $this->assertSame(1, $entry['usage_count']);
         $this->assertSame([500, 500], [$entry['width'], $entry['height']]);
         $this->assertNull($entry['by']);
+    }
+
+    /**
+     * Without a user the command line is who did it. Outside the Control
+     * Panel nobody can be named, so that stays empty rather than guessed.
+     */
+    #[Test]
+    public function the_log_page_names_the_command_line_when_nobody_was_logged_in()
+    {
+        Asset::find('assets::docs/manual.pdf')->delete();
+        Source::during(Source::OTHER, fn () => Asset::find('assets::img/second.jpg')->delete());
+
+        $entries = $this->actingAs($this->superUser())->get(cp_route('asset-usage.log'))->viewData('page')['props']['entries'];
+
+        $this->assertSame(['img/second.jpg', 'docs/manual.pdf'], array_column($entries, 'path'));
+        $this->assertNull($entries[0]['by']);
+        $this->assertSame(__('asset-usage::messages.log.by_command_line'), $entries[1]['by']['name']);
     }
 
     #[Test]
@@ -249,15 +267,16 @@ class AssetLogTest extends TestCase
     }
 
     /**
-     * The kept original dates from before the first compression, so a restore
-     * undoes every compression since, and none of them counts any more.
+     * Earlier versions compressed an image again after a settings change, so
+     * a log can hold two compressions of one image. The kept original dates
+     * from before the first, so a restore undoes both, and neither counts.
      */
     #[Test]
     public function a_restore_after_compressing_twice_undoes_both()
     {
         $this->compress();
-        config(['statamic.asset-usage.compression.max_dimension' => 100]);
-        $this->compress();
+        $first = (new AssetLog)->entries(AssetLog::COMPRESSED)[0];
+        (new AssetLog)->recordCompression(Asset::find(self::ID), $first, $this->superUser());
 
         $this->postJson(cp_route('asset-usage.compress.restore'), ['asset' => self::ID])->assertOk();
 

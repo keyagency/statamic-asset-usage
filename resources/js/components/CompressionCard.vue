@@ -2,10 +2,6 @@
 import { Button, Card, Heading, Icon } from '@statamic/cms/ui'
 import CompressionTotals from './CompressionTotals.vue'
 import MarkedText from './MarkedText.vue'
-import { mark, parts } from '../support/formatting.js'
-
-/** Shown as code inside the notice that explains when images are analysed. */
-const ANALYZE_COMMAND = 'php please asset-usage:analyze'
 
 /**
  * The top of the Compression page: what the analysis found, what the addon
@@ -29,9 +25,17 @@ export default {
             return ''
         },
 
-        /** The command in the explanation, marked so it renders as code. */
+        /** Names the button by its own label, so the two can't drift apart. */
         whenInfo() {
-            return parts(__('asset-usage::messages.compress.when_info').replace(ANALYZE_COMMAND, mark(ANALYZE_COMMAND)))
+            return __('asset-usage::messages.compress.when_info', { button: __('asset-usage::messages.compress.analyze') })
+        },
+
+        /** Not translated: they are typed as they are. */
+        commands() {
+            return [
+                { command: 'php please asset-usage:analyze', description: __('asset-usage::messages.compress.cli_analyze') },
+                { command: 'php please asset-usage:compress', description: __('asset-usage::messages.compress.cli_compress') },
+            ]
         },
 
         /**
@@ -109,11 +113,7 @@ export default {
             </li>
             <li class="flex gap-2 text-gray-600 dark:text-gray-400">
                 <Icon name="info" class="mt-0.5 size-4 shrink-0" />
-                <MarkedText
-                    :parts="whenInfo"
-                    as="code"
-                    marked-class="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.9em] text-gray-900 dark:bg-gray-800 dark:text-gray-100"
-                />
+                <span v-text="whenInfo" />
             </li>
             <li v-for="warning in warnings" :key="warning.text" class="flex gap-2 text-amber-700 dark:text-amber-400">
                 <Icon name="alert-warning-exclamation-mark" class="mt-0.5 size-4 shrink-0" />
@@ -130,5 +130,24 @@ export default {
                 </span>
             </li>
         </ul>
+
+        <!-- The same actions from the command line, apart from the rest. Indented to line up with the text above. -->
+        <div class="mt-4 border-t border-gray-200 pt-4 text-sm dark:border-gray-700">
+            <p class="flex gap-2 text-gray-600 dark:text-gray-400">
+                <Icon name="code-block" class="mt-0.5 size-4 shrink-0" />
+                <span v-text="__('asset-usage::messages.compress.cli_heading')" />
+            </p>
+            <dl class="mt-2 grid gap-x-4 gap-y-1.5 ps-6 sm:grid-cols-[auto_1fr] sm:items-center">
+                <template v-for="item in commands" :key="item.command">
+                    <dt>
+                        <code
+                            class="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.9em] text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+                            v-text="item.command"
+                        />
+                    </dt>
+                    <dd class="text-gray-600 dark:text-gray-400" v-text="item.description" />
+                </template>
+            </dl>
+        </div>
     </Card>
 </template>

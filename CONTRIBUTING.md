@@ -91,7 +91,7 @@ Five rules are easy to break; please preserve them:
 
 1. **Content is read through Statamic's repositories, never the filesystem.** That's what makes the addon work on Eloquent-driver sites, which is its reason to exist.
 2. **The injected `asset_usage` field stays `visibility: computed`.** That is the only thing keeping it out of every asset's `.meta` file. `UsageFieldTest::updating_an_asset_never_writes_the_field_into_its_data` guards it. The one exception is the asset browser's own listing requests, where it is `read_only` so the column can be sorted; saving an asset never happens in those (`InjectUsageField::sortsHere()`).
-3. **Deletion rails live in `Usage\Unused`**, so the Control Panel and the CLI can't disagree about what may be removed. Add new guards there, not in a controller.
+3. **Deletion rails live in `Usage\Unused`**, so the Control Panel and the CLI can't disagree about what may be removed. Add new guards there, not in a controller. In the same way, `Analyzer::compressible()` decides which images "Compress all" and `asset-usage:compress` go through.
 4. **Which assets exist comes from `$container->queryAssets()`, not `$container->files()`.** On the Eloquent driver that file listing only reports the container root, so every asset in a folder would silently disappear. `ContainerPathsTest` guards it.
 5. **A compressed or restored file replaces the asset through `$asset->reupload()`, never by writing to the disk.** That regenerates the meta, clears Glide and fires `AssetReuploaded`, which the git integration commits. A direct write leaves Statamic's cached meta and old Glide renders behind.
 

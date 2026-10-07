@@ -104,6 +104,32 @@ class CompressorTest extends TestCase
         $this->assertSame(72, $quantized->afterDpi);
     }
 
+    /**
+     * A web server often runs with a shorter PATH than a terminal (MAMP,
+     * PHP-FPM). When only the command line finds pngquant, the CP and the
+     * command line each see the other's analysis as made with other settings.
+     */
+    #[Test]
+    public function pngquant_is_found_outside_the_path_too()
+    {
+        $installed = collect(Compressor::PNGQUANT_DIRECTORIES)
+            ->map(fn (string $directory) => "{$directory}/pngquant")
+            ->first(fn (string $path) => is_file($path) && is_executable($path));
+
+        if (! $installed) {
+            $this->markTestSkipped('pngquant is not installed in one of the usual directories.');
+        }
+
+        $path = getenv('PATH');
+        putenv('PATH=/nonexistent');
+
+        try {
+            $this->assertSame($installed, Compressor::findPngquant());
+        } finally {
+            putenv("PATH={$path}");
+        }
+    }
+
     #[Test]
     public function formats_it_does_not_compress_are_unsupported()
     {

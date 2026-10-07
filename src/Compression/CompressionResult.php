@@ -20,9 +20,9 @@ final class CompressionResult
     public const ERROR = 'error';
 
     /**
-     * The file is the one this addon made, with the settings in force. Saving
-     * it again would shave off another percent or so each time while losing a
-     * little quality, so it is not offered again.
+     * The file is the one this addon made. Saving it again would shave off
+     * another percent or so each time while losing a little quality, so it is
+     * not offered again, whatever the settings.
      */
     public const COMPRESSED = 'compressed';
 

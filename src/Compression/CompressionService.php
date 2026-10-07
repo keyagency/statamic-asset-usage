@@ -4,6 +4,7 @@ namespace KeyAgency\AssetUsage\Compression;
 
 use Illuminate\Support\Facades\File;
 use KeyAgency\AssetUsage\Log\AssetLog;
+use KeyAgency\AssetUsage\Log\Source;
 use Statamic\Contracts\Assets\Asset;
 
 /**
@@ -84,12 +85,13 @@ class CompressionService
      * Replaces the file with the preview that was shown. Refuses when the file
      * changed since, or when the preview would not make it smaller.
      *
+     * @param  string  $source  where it was compressed, for the log, see Source
      * @return array the record of the file before it was replaced
      *
      * @throws FileChanged
      * @throws NothingToCompress
      */
-    public function compress(Asset $asset, string $version, $user = null): array
+    public function compress(Asset $asset, string $version, $user = null, string $source = Source::TOOLS): array
     {
         if ($version !== Analyzer::version($asset)) {
             throw new FileChanged;
@@ -117,9 +119,9 @@ class CompressionService
 
         File::delete($path);
 
-        $this->backups->markCompressed($asset, Analyzer::version($asset), $this->analyzer->compressor()->fingerprint());
+        $this->backups->markCompressed($asset, Analyzer::version($asset));
         $this->analyzer->analyze([$asset], force: true);
-        $this->log->recordCompression($asset, $record, $user);
+        $this->log->recordCompression($asset, $record, $user, $source);
 
         return $record;
     }

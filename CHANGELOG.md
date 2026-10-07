@@ -1,5 +1,24 @@
 # Release Notes
 
+## 1.3.2 (2026-10-07)
+
+### What's new
+- Compress selected: tick images on the Compression page and compress only those.
+- `asset-usage:compress` compresses every image that can get smaller from the command line, with `--container`, `--dry-run`, `--analyze` and `--json`.
+- `asset-usage:analyze --container` analyses one container.
+
+### What's improved
+- Sorting on Saving puts the images that can get smaller first, in either direction.
+- The log shows "Command line" under By for what a command did, and says when a compression came from `asset-usage:compress`.
+- The Compression page names the button that analyses, and lists the commands for the command line.
+
+### What's fixed
+- The Control Panel and the command line saw each other's analysis as out of date when only one of them found pngquant. pngquant is now also looked for in `/opt/homebrew/bin`, `/usr/local/bin` and `/usr/bin`.
+- An image the addon compressed is no longer offered again after a settings change, which would encode it again and lose quality. To compress it with other settings, restore the original first.
+
+### Upgrading
+If the web server finds pngquant now and didn't before, the Compression page says the settings changed. Analyse once more.
+
 ## 1.3.1 (2026-10-06)
 
 ### What's new

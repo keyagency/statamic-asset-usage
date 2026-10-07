@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use KeyAgency\AssetUsage\Compression\AnalysisStore;
 use KeyAgency\AssetUsage\Compression\Analyzer;
 use KeyAgency\AssetUsage\Compression\CompressionResult;
+use KeyAgency\AssetUsage\Compression\CompressionService;
 use KeyAgency\AssetUsage\Compression\PathReplacementFile;
 use KeyAgency\AssetUsage\Jobs\AnalyzeAllCompression;
 use KeyAgency\AssetUsage\Jobs\AnalyzeCompression;
@@ -73,10 +74,13 @@ class CompressionAnalysisTest extends TestCase
         $this->assertTrue($heavy['analyzed']);
         $this->assertTrue($heavy['compressible']);
         $this->assertGreaterThan(20, $heavy['savings']);
+        $this->assertGreaterThan(0, $heavy['savable_bytes']);
+        $this->assertFalse($heavy['icc_lost']);
 
         // Already squeezed harder than the configured quality, so re-encoding only makes it bigger.
         $this->assertTrue($small['analyzed']);
         $this->assertFalse($small['compressible']);
+        $this->assertNull($small['savable_bytes']);
 
         $status = $this->response()->json('meta.compression');
 
@@ -138,7 +142,32 @@ class CompressionAnalysisTest extends TestCase
         $paths = fn (string $order) => $this->rows(['sort' => 'savings', 'order' => $order])->keys()->all();
 
         $this->assertSame(['img/heavy.jpg', 'img/small.jpg', 'docs/manual.pdf'], $paths('desc'));
-        $this->assertSame(['img/small.jpg', 'img/heavy.jpg', 'docs/manual.pdf'], $paths('asc'));
+        // The image that can get smaller leads in this direction too.
+        $this->assertSame(['img/heavy.jpg', 'img/small.jpg', 'docs/manual.pdf'], $paths('asc'));
+    }
+
+    /**
+     * A compressed image shows what compressing saved, which can be more than
+     * any image still has to gain. It sorts with the rest all the same.
+     */
+    #[Test]
+    public function it_sorts_the_images_that_can_get_smaller_first()
+    {
+        Storage::disk('assets')->put('img/medium.jpg', Images::jpeg(260, 260, quality: 92));
+        AnalyzeAllCompression::dispatch();
+
+        $heavy = Asset::find('assets::img/heavy.jpg');
+        CompressionService::make()->compress($heavy, Analyzer::version($heavy));
+
+        $rows = $this->rows();
+        $this->assertTrue($rows['img/medium.jpg']['compression']['compressible']);
+        $this->assertSame('compressed', $rows['img/heavy.jpg']['compression']['status']);
+        $this->assertGreaterThan($rows['img/medium.jpg']['compression']['savings'], $rows['img/heavy.jpg']['compression']['savings']);
+
+        $paths = fn (string $order) => $this->rows(['sort' => 'savings', 'order' => $order])->keys()->all();
+
+        $this->assertSame(['img/medium.jpg', 'img/heavy.jpg', 'img/small.jpg', 'docs/manual.pdf'], $paths('desc'));
+        $this->assertSame(['img/medium.jpg', 'img/small.jpg', 'img/heavy.jpg', 'docs/manual.pdf'], $paths('asc'));
     }
 
     #[Test]
@@ -358,6 +387,30 @@ class CompressionAnalysisTest extends TestCase
         $this->assertNotNull($store->meta()['analyzed_at']);
         $this->assertNotNull($store->record('assets::img/heavy.jpg'));
         $this->assertNotNull($store->record('assets::img/small.jpg'));
+    }
+
+    /**
+     * Only part of the images, so the analysis as a whole keeps its date and
+     * the settings it was made with, and the other containers keep theirs.
+     */
+    #[Test]
+    public function the_command_can_analyse_one_container()
+    {
+        $this->makeContainer('more');
+        Storage::disk('more')->put('photo.jpg', Images::jpeg(600, 600, quality: 98));
+
+        $this->artisan('statamic:asset-usage:analyze', ['--container' => 'more'])
+            ->expectsOutputToContain('Analysing 1 image.')
+            ->assertSuccessful();
+
+        $store = new AnalysisStore;
+
+        $this->assertNotNull($store->record('more::photo.jpg'));
+        $this->assertNull($store->record('assets::img/heavy.jpg'));
+        $this->assertNull($store->meta()['analyzed_at']);
+
+        $this->artisan('statamic:asset-usage:analyze', ['--container' => 'nope'])->assertFailed();
+        $this->artisan('statamic:asset-usage:analyze', ['--container' => 'more', '--queue' => true])->assertFailed();
     }
 
     /**

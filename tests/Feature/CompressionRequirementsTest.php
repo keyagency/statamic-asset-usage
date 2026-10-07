@@ -83,6 +83,7 @@ class CompressionRequirementsTest extends TestCase
         $this->assertNull($this->editorMeta());
 
         $this->artisan('statamic:asset-usage:analyze')->assertFailed();
+        $this->artisan('statamic:asset-usage:compress', ['--force' => true])->assertFailed();
     }
 
     #[Test]

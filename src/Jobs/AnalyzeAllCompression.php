@@ -49,11 +49,12 @@ class AnalyzeAllCompression implements ShouldQueue
      * fresh rather than through ids(): a queue worker runs one analysis after
      * another, and what Blink remembers lives as long as the worker does.
      *
+     * @param  string|null  $handle  only the images in this container
      * @return array<string, string[]>
      */
-    public static function batches(): array
+    public static function batches(?string $handle = null): array
     {
-        return self::list()
+        return self::list($handle)
             ->chunk(self::BATCH_SIZE)
             ->mapWithKeys(fn ($chunk) => [(string) Str::uuid() => $chunk->values()->all()])
             ->all();
@@ -68,11 +69,13 @@ class AnalyzeAllCompression implements ShouldQueue
     /**
      * Ids built from the plucked paths, which avoids hydrating every asset.
      */
-    private static function list(): Collection
+    private static function list(?string $handle = null): Collection
     {
-        return Containers::enabled()->flatMap(fn ($container) => $container->queryAssets()->pluck('path')
-            ->filter(fn ($path) => $path && Compressor::supports(pathinfo($path, PATHINFO_EXTENSION)))
-            ->map(fn ($path) => "{$container->handle()}::{$path}")
-        )->values();
+        return Containers::enabled()
+            ->filter(fn ($container) => ! $handle || $container->handle() === $handle)
+            ->flatMap(fn ($container) => $container->queryAssets()->pluck('path')
+                ->filter(fn ($path) => $path && Compressor::supports(pathinfo($path, PATHINFO_EXTENSION)))
+                ->map(fn ($path) => "{$container->handle()}::{$path}")
+            )->values();
     }
 }

@@ -183,7 +183,8 @@ return [
     | - dpi: the resolution written into the file. Browsers ignore it.
     | - png_quality: the min-max range passed to pngquant. Without pngquant on
     |   the server, PNGs are only resized and saved losslessly.
-    | - pngquant_binary: path to pngquant, or null to look it up in the PATH.
+    | - pngquant_binary: path to pngquant, or null to look for it in the PATH
+    |   and the usual install directories.
     | - keep_originals_days: null keeps originals forever.
     |
     | Changing any of these makes the analysed results out of date, so analyse

@@ -50,6 +50,13 @@ class Compressor
         );
     }
 
+    /**
+     * Searched after the PATH. A web server often runs with a shorter PATH
+     * than a terminal (MAMP, PHP-FPM), and when only one of the two finds
+     * pngquant, each sees the other's analysis as made with other settings.
+     */
+    public const PNGQUANT_DIRECTORIES = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin'];
+
     /** Looked up once per request: searching the PATH on every status poll adds up. */
     public static function findPngquant(): ?string
     {
@@ -58,7 +65,7 @@ class Compressor
                 return is_executable($configured) ? $configured : null;
             }
 
-            return (new ExecutableFinder)->find('pngquant');
+            return (new ExecutableFinder)->find('pngquant', null, self::PNGQUANT_DIRECTORIES);
         });
     }
 

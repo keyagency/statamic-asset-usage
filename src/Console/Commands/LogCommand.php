@@ -4,6 +4,7 @@ namespace KeyAgency\AssetUsage\Console\Commands;
 
 use Illuminate\Console\Command;
 use KeyAgency\AssetUsage\Log\AssetLog;
+use KeyAgency\AssetUsage\Log\Source;
 use Statamic\Console\RunsInPlease;
 use Statamic\Support\Str;
 
@@ -52,7 +53,7 @@ class LogCommand extends Command
                 $entry['at'],
                 $entry['type'],
                 $entry['asset_id'],
-                $entry['by']['name'] ?? '',
+                $entry['by']['name'] ?? (in_array($entry['source'] ?? null, [Source::CLI, Source::CONSOLE], true) ? 'command line' : ''),
                 $this->details($entry),
             ], $entries)
         );
@@ -83,9 +84,10 @@ class LogCommand extends Command
         }
 
         return sprintf(
-            '%s → %s%s',
+            '%s → %s%s%s',
             Str::fileSizeForHumans($entry['before_bytes'], 1),
             Str::fileSizeForHumans($entry['after_bytes'], 1),
+            ($entry['source'] ?? null) === Source::CLI ? ', via asset-usage:compress' : '',
             $entry['restored_at'] ? ', restored '.$entry['restored_at'] : ''
         );
     }
