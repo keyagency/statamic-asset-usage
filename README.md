@@ -14,6 +14,7 @@ A Statamic 6 Control Panel addon for cleaning up your asset containers. It shows
 - **An overview under Tools**: filter by container, site, usage and path, sort by any column (name, size, resolution, DPI, saving, date or usage), expand any asset to see where it's used, and delete the ones nothing needs.
 - **Image compression**: images that can get smaller get a View compression button. A before and after page shows the result first, and the original is kept so it can be put back. Or compress a selection, or all of them at once, after a warning.
 - **A log** of every compression and every deleted asset, with who did it.
+- **A PDF of the list**, with thumbnails, the active filters and a link to each asset. The filters are in the URL too, so a link opens the list as you left it.
 - **`please` commands** for reporting, cleaning up and compressing from the CLI.
 
 ## Works on flat-file and database sites alike
@@ -221,6 +222,18 @@ The Compression page always says when the last analysis ran.
 
 Users only see entries for the containers they can view. The log keeps a user's name, not their email address. Without a user, a command or a queued job shows as "Command line"; outside the Control Panel nobody can be named, so that stays empty. It is kept in `storage/statamic/asset-usage/asset-log.jsonl`, outside your content and git. `php please asset-usage:log` prints it, `--json` for scripts.
 
+## Sharing a filtered list
+
+The filters, the sort and the page are in the URL of the Overview and the Compression page, so a link opens the list as you left it. A filter the person opening it can't use, such as a container they may not view, is left out.
+
+**Download current view (PDF)**, next to Delete selected (Compress selected on the Compression page), puts the list as it is filtered and sorted into a PDF named after the page, the date and the time (`asset-usage-overview-2026-10-08-143207.pdf`): the addon's name, who made it, the date, the active filters and the sort at the top, then every matching asset with its thumbnail, the same columns as the list and a link to the asset in the Control Panel. A PDF lists at most 1,000 assets. When more match, it says so at the top, so narrow the filters for the rest.
+
+- The thumbnails are made from the original files, a few at a time, before the PDF itself. The button counts them meanwhile ("Creating PDF… 120 / 640"). They are kept per version of the file in `storage/statamic/asset-usage/thumbnails`, so the next PDF is ready in seconds. Keep the page open until the download starts.
+- A file without a thumbnail (a PDF, an SVG, an image that can't be read or doesn't fit in `memory_limit`) shows its extension instead.
+- On the Overview the PDF needs usage data that is up to date, the same as deleting does: a list of "unused" assets made from data that can't be believed would mislead whoever acts on it.
+- A PDF of 1,000 assets takes about five seconds and some 250 MB of memory. It gets the limits Statamic gives Glide (`statamic.system.php_memory_limit` and `php_max_execution_time`); the thumbnails only get the time limit, so the site's own `memory_limit` decides which images are too large to make one of.
+- The PDF is made with [dompdf](https://github.com/dompdf/dompdf).
+
 ## Configuration
 
 ```bash
@@ -287,10 +300,10 @@ return [
 
 ## Permissions
 
-- **View asset usage**: the Overview on the Tools page, Saving column included.
+- **View asset usage**: the Overview on the Tools page, Saving column and PDF included.
 - **View log**: the Log page, and the buttons and tab that lead to it.
 - **Delete unused assets**: the delete buttons on the Tools page and the endpoints behind them.
-- **Compress images**: the Compression page with its Analyse, Compress selected and Compress all buttons, the before and after page, the Compression part of the asset editor and restoring an original. Replacing the file also needs Statamic's own edit and upload permissions for that container.
+- **Compress images**: the Compression page with its Analyse, Compress selected, Compress all and Download current view (PDF) buttons, the before and after page, the Compression part of the asset editor and restoring an original. Replacing the file also needs Statamic's own edit and upload permissions for that container.
 
 The "Used in" panel and the browser column follow Statamic's normal asset permissions; if you can see the asset, you can see its usage. The Tools pages do the same: they only list containers whose assets the user may view, the log and the compression counts included, and deleting also needs Statamic's own delete permission for that container.
 

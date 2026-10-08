@@ -7,7 +7,6 @@ import {
     Description,
     Header,
     Heading,
-    Icon,
     Pagination,
     Panel,
     PanelFooter,
@@ -16,13 +15,16 @@ import {
 import AboutFooter from '../components/AboutFooter.vue'
 import AssetFilters, { ANY_SITE } from '../components/AssetFilters.vue'
 import AssetRow from '../components/AssetRow.vue'
+import AssetTableHead from '../components/AssetTableHead.vue'
 import CompressAll from '../components/CompressAll.vue'
 import CompressionCard from '../components/CompressionCard.vue'
+import DownloadPdf from '../components/DownloadPdf.vue'
+import IndexAlerts from '../components/IndexAlerts.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import MarkedText from '../components/MarkedText.vue'
 import PageTabs from '../components/PageTabs.vue'
 import DeleteConfirmation from '../components/DeleteConfirmation.vue'
-import RowCheckbox from '../components/RowCheckbox.vue'
+import { readQuery, writeQuery } from '../support/filterQuery.js'
 import { escapeHtml, formatBytes, formatDate, mark, parts } from '../support/formatting.js'
 import polling from '../support/polling.js'
 
@@ -32,23 +34,24 @@ export default {
         Alert,
         AssetFilters,
         AssetRow,
+        AssetTableHead,
         Button,
         Card,
         CompressAll,
         CompressionCard,
         DeleteConfirmation,
         Description,
+        DownloadPdf,
         Head,
         Header,
         Heading,
-        Icon,
+        IndexAlerts,
         ListSkeleton,
         MarkedText,
         PageTabs,
         Pagination,
         Panel,
         PanelFooter,
-        RowCheckbox,
         Text,
     },
 
@@ -78,17 +81,29 @@ export default {
         compressBatchUrl: String,
         keepOriginalsDays: Number,
         logUrl: String,
+        exportUrl: String,
+        exportThumbnailsUrl: String,
+        exportMakeThumbnailsUrl: String,
     },
 
     data() {
+        // A shared link opens with its filters set; see support/filterQuery.js.
+        const state = readQuery(this.urlDefaults(), {
+            usage: this.view === 'usage',
+            compression: this.view === 'compression',
+            containers: this.containers.map(container => container.handle),
+            sites: this.multisite && this.view === 'usage' ? this.sites.map(site => site.handle) : [],
+            sorts: ['path', 'size', 'resolution', 'dpi', 'last_modified', 'usage', ...(this.compressionEnabled ? ['savings'] : [])],
+        })
+
         return {
             assets: [],
             meta: null,
             index: { exists: false, stale: true, aged: false, auto_update: true, building: false, built_at: null, items_scanned: 0 },
-            filters: { usage: 'all', container: null, site: ANY_SITE, search: '', compression: 'all' },
-            sortColumn: this.view === 'compression' ? 'savings' : 'path',
-            sortDirection: this.view === 'compression' ? 'desc' : 'asc',
-            page: 1,
+            filters: { usage: state.usage, container: state.container, site: state.site, search: state.search, compression: state.compression },
+            sortColumn: state.sort,
+            sortDirection: state.order,
+            page: state.page,
             /** False until the first response lands, so nothing flashes an empty or stale state. */
             ready: false,
             loading: true,
@@ -184,16 +199,6 @@ export default {
             return this.selected.length ? `${label} (${this.selected.length})` : label
         },
 
-        /**
-         * What an overdue rebuild is worth saying depends on whether anything
-         * has been keeping the index current in the meantime.
-         */
-        agedInstructions() {
-            const key = this.index.auto_update ? 'aged_instructions' : 'aged_instructions_manual'
-
-            return __(`asset-usage::messages.index.${key}`, { time: this.index.built_at_relative })
-        },
-
         /** Hidden when the image driver is missing: every cell would be empty. */
         showsSavings() {
             return this.compressionEnabled && this.compression?.available !== false
@@ -234,6 +239,31 @@ export default {
         unusedTotal() {
             return this.meta?.unused_total ?? 0
         },
+
+        /** In the order the PDF's link to this page writes them, so the two URLs read the same. */
+        urlState() {
+            return {
+                search: this.filters.search.trim(),
+                usage: this.view === 'usage' ? this.filters.usage : undefined,
+                compression: this.view === 'compression' ? this.filters.compression : undefined,
+                container: this.filters.container,
+                site: this.view === 'usage' ? this.filters.site : undefined,
+                sort: this.sortColumn,
+                order: this.sortDirection,
+                page: this.page,
+            }
+        },
+
+        /** On the overview a PDF needs usage data that can be believed, which the server checks as well. */
+        downloadProps() {
+            return {
+                params: { ...this.requestParams, view: this.view },
+                url: this.exportUrl,
+                thumbnailsUrl: this.exportThumbnailsUrl,
+                makeThumbnailsUrl: this.exportMakeThumbnailsUrl,
+                disabled: this.busy || !this.meta?.total || (this.view === 'usage' && (!this.index.exists || this.index.stale)),
+            }
+        },
     },
 
     watch: {
@@ -259,6 +289,20 @@ export default {
     },
 
     methods: {
+        /** How the page starts out, which is what the URL leaves out. */
+        urlDefaults() {
+            return {
+                search: '',
+                usage: 'all',
+                compression: 'all',
+                container: null,
+                site: ANY_SITE,
+                sort: this.view === 'compression' ? 'savings' : 'path',
+                order: this.view === 'compression' ? 'desc' : 'asc',
+                page: 1,
+            }
+        },
+
         load() {
             const current = ++this.latestLoad
             this.loading = true
@@ -267,6 +311,15 @@ export default {
                 .get(this.assetsUrl, { params: this.requestParams })
                 .then(response => {
                     if (current !== this.latestLoad) return
+
+                    // A shared link can point past the last page once assets are gone.
+                    if (this.page > response.data.meta.last_page) {
+                        this.goToPage(response.data.meta.last_page)
+
+                        return
+                    }
+
+                    writeQuery(this.urlState, this.urlDefaults())
 
                     this.assets = response.data.data
                     this.meta = response.data.meta
@@ -479,18 +532,6 @@ export default {
             this.reload()
         },
 
-        sortIcon(field) {
-            if (this.sortColumn !== field) return null
-
-            return this.sortDirection === 'asc' ? 'sort-asc' : 'sort-desc'
-        },
-
-        ariaSort(field) {
-            if (this.sortColumn !== field) return 'none'
-
-            return this.sortDirection === 'asc' ? 'ascending' : 'descending'
-        },
-
         /** Escaped, because it always ends up in a toast. */
         errorMessage(error) {
             return escapeHtml(error.response?.data?.message ?? error.message)
@@ -555,27 +596,7 @@ export default {
                 :text="__('asset-usage::messages.no_containers')"
             />
 
-            <Alert
-                v-else-if="view === 'usage' && index.building"
-                class="mb-4"
-                :text="__('asset-usage::messages.index.checking')"
-            />
-
-            <Alert
-                v-else-if="view === 'usage' && index.stale"
-                class="mb-4"
-                variant="warning"
-                :heading="index.exists ? __('asset-usage::messages.index.stale') : __('asset-usage::messages.index.not_ready')"
-                :text="index.exists ? __('asset-usage::messages.index.stale_instructions') : __('asset-usage::messages.index.not_ready_instructions')"
-            />
-
-            <!-- Deliberately not a warning: the data is usable, a rebuild is just overdue. -->
-            <Alert
-                v-else-if="view === 'usage' && index.aged"
-                class="mb-4"
-                :heading="__('asset-usage::messages.index.aged')"
-                :text="agedInstructions"
-            />
+            <IndexAlerts v-else-if="view === 'usage'" :index="index" />
 
             <!--
                 Everything about compression lives on its own page. The overview only keeps the
@@ -635,29 +656,35 @@ export default {
             />
 
             <!-- What was deleted so far, with the way to the log that lists it. -->
-            <p
+            <!-- The same bar as the compression totals on the Compression page. -->
+            <div
                 v-if="view === 'usage' && meta?.deletions?.count"
-                class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600 dark:text-gray-400"
+                class="mb-4 flex flex-col gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/60"
             >
-                <Icon name="trash" class="size-4 shrink-0" />
-                <span class="tabular-nums">
+                <p class="text-gray-700 tabular-nums dark:text-gray-300">
                     {{ __n('asset-usage::messages.log.deleted_count', meta.deletions.count, { count: meta.deletions.count }) }}
                     <span aria-hidden="true"> · </span>
                     <strong class="font-semibold" v-text="__('asset-usage::messages.log.freed', { size: formatBytes(meta.deletions.bytes) })" />
-                </span>
-                <Button v-if="logUrl" size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
-            </p>
+                </p>
+                <Button v-if="logUrl" class="shrink-0" size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
+            </div>
 
-            <div v-if="deletes" class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <Button
-                    variant="danger"
-                    :disabled="busy || !selected.length"
-                    :text="deleteSelectedText"
-                    @click="confirmDelete(selectedAssets)"
-                />
+            <!-- Also for users who may not delete, who still get the PDF. -->
+            <div v-if="view === 'usage'" class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+                    <Button
+                        v-if="deletes"
+                        variant="danger"
+                        :disabled="busy || !selected.length"
+                        :text="deleteSelectedText"
+                        @click="confirmDelete(selectedAssets)"
+                    />
+
+                    <DownloadPdf v-bind="downloadProps" />
+                </div>
 
                 <Button
-                    v-if="unusedTotal"
+                    v-if="deletes && unusedTotal"
                     :disabled="busy"
                     :text="`${__('asset-usage::messages.delete.all_unused')} (${unusedTotal})`"
                     @click="confirmDeleteAllUnused"
@@ -675,7 +702,9 @@ export default {
                 :disabled="busy || compression?.analyzing"
                 @start="compressing = true"
                 @finish="compressing = false; load()"
-            />
+            >
+                <DownloadPdf v-bind="downloadProps" />
+            </CompressAll>
 
             <Text
                 v-if="!assets.length"
@@ -697,41 +726,19 @@ export default {
                     :aria-disabled="busy"
                 >
                     <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-gray-200 text-start dark:border-gray-700">
-                                <th v-if="selects" scope="col" class="w-px py-2.5 ps-4">
-                                    <!-- A block-level flex box, because an inline checkbox sits on the text baseline instead of the middle. -->
-                                    <div class="flex items-center">
-                                        <RowCheckbox
-                                            v-if="selectableAssets.length"
-                                            :model-value="allSelected"
-                                            :indeterminate="someSelected"
-                                            :label="compresses ? __('asset-usage::messages.compress.select_all') : __('asset-usage::messages.delete.select_all')"
-                                            @update:model-value="toggleAll"
-                                        />
-                                    </div>
-                                </th>
-                                <th
-                                    v-for="column in columns"
-                                    :key="column.field"
-                                    scope="col"
-                                    class="px-4 py-2.5 text-start whitespace-nowrap"
-                                    :aria-sort="ariaSort(column.field)"
-                                >
-                                    <Button
-                                        :text="column.label"
-                                        :icon-append="sortIcon(column.field)"
-                                        size="sm"
-                                        variant="ghost"
-                                        class="-my-1 -ms-3 text-sm! font-medium! text-gray-900! dark:text-gray-400!"
-                                        @click="sortBy(column.field)"
-                                    />
-                                </th>
-                                <th v-if="deletes" scope="col" class="px-4 py-2.5">
-                                    <span class="sr-only" v-text="__('asset-usage::messages.delete.action')" />
-                                </th>
-                            </tr>
-                        </thead>
+                        <AssetTableHead
+                            :columns="columns"
+                            :sort-column="sortColumn"
+                            :sort-direction="sortDirection"
+                            :selects="selects"
+                            :selectable="selectableAssets.length > 0"
+                            :all-selected="allSelected"
+                            :some-selected="someSelected"
+                            :compresses="compresses"
+                            :deletes="deletes"
+                            @sort="sortBy"
+                            @toggle-all="toggleAll"
+                        />
 
                         <tbody>
                             <AssetRow

@@ -12,6 +12,7 @@ Asset Usage is a Key Agency Statamic addon. The source lives on GitHub so you ca
 - whether the usage index was current, which the Tools page says, and `php please asset-usage:index` rebuilds it
 - for missing or miscounted assets: the output of `php please asset-usage:doctor`
 - for compression problems: the file type and size of the image, and the output of `php please asset-usage:doctor`, which names the image driver Glide uses and whether pngquant is installed
+- for a PDF that fails: how many assets the filters match, and the PHP `memory_limit`
 
 Please don't paste production content or credentials. A minimal reproduction is enough.
 
@@ -82,7 +83,7 @@ On PHP 8.2 Composer installs Intervention Image v3 (with Glide 3), on newer PHP 
 ## Conventions
 
 - Console output is English, always, written as literals in the command itself. It ends up in bug reports, and a diagnostic in the reporter's language is harder to read, not easier.
-- Other user-facing strings live in `lang/{locale}/messages.php` (English, Dutch, German, French, Spanish and Italian). Add keys to every locale and don't inline literals. `TranslationsTest` fails when a locale is missing a key, a plural segment or a placeholder. Related strings are grouped under their own array key (`index`, `filters`, `columns`, `delete`, `compress`, `log`, `nav`, `errors`, …) rather than prefixed.
+- Other user-facing strings live in `lang/{locale}/messages.php` (English, Dutch, German, French, Spanish and Italian). Add keys to every locale and don't inline literals. `TranslationsTest` fails when a locale is missing a key, a plural segment or a placeholder. Related strings are grouped under their own array key (`index`, `filters`, `columns`, `delete`, `compress`, `log`, `export`, `nav`, `errors`, …) rather than prefixed.
 - Config is read through `Support\Settings`, not scattered `config()` calls.
 - Statamic's toasts render their message as HTML. Text users control, such as a file path or a message from the server, goes through `escapeHtml()` from `resources/js/support/formatting.js` before it reaches `$toast`.
 - A new config key needs an update script in `src/UpdateScripts/` that adds it to configs sites have already published. Its `isUpdatingTo()` version has to be the version you tag, or it never runs; AGENTS.md has the details.
@@ -91,7 +92,7 @@ Five rules are easy to break; please preserve them:
 
 1. **Content is read through Statamic's repositories, never the filesystem.** That's what makes the addon work on Eloquent-driver sites, which is its reason to exist.
 2. **The injected `asset_usage` field stays `visibility: computed`.** That is the only thing keeping it out of every asset's `.meta` file. `UsageFieldTest::updating_an_asset_never_writes_the_field_into_its_data` guards it. The one exception is the asset browser's own listing requests, where it is `read_only` so the column can be sorted; saving an asset never happens in those (`InjectUsageField::sortsHere()`).
-3. **Deletion rails live in `Usage\Unused`**, so the Control Panel and the CLI can't disagree about what may be removed. Add new guards there, not in a controller. In the same way, `Analyzer::compressible()` decides which images "Compress all" and `asset-usage:compress` go through.
+3. **Deletion rails live in `Usage\Unused`**, so the Control Panel and the CLI can't disagree about what may be removed. Add new guards there, not in a controller. In the same way, `Analyzer::compressible()` decides which images "Compress all" and `asset-usage:compress` go through, and `Concerns\ListsAssets` which assets the list and its PDF show.
 4. **Which assets exist comes from `$container->queryAssets()`, not `$container->files()`.** On the Eloquent driver that file listing only reports the container root, so every asset in a folder would silently disappear. `ContainerPathsTest` guards it.
 5. **A compressed or restored file replaces the asset through `$asset->reupload()`, never by writing to the disk.** That regenerates the meta, clears Glide and fires `AssetReuploaded`, which the git integration commits. A direct write leaves Statamic's cached meta and old Glide renders behind.
 

@@ -1,5 +1,17 @@
 # Release Notes
 
+## 1.4.0 (2026-10-08)
+
+### What's new
+- Download current view (PDF) on the Overview and the Compression page: the list as it is filtered and sorted, with thumbnails, the active filters and a link to each asset in the Control Panel. A PDF lists at most 1,000 assets and says so when more match.
+- The filters, the sort and the page are in the URL, so a link opens the list with them set.
+
+### What's improved
+- The deletion totals on the Overview are shown in the same bar as the compression totals on the Compression page.
+
+### Upgrading
+The addon now depends on `dompdf/dompdf`, which `composer update` installs. The thumbnails for the PDF are kept in `storage/statamic/asset-usage/thumbnails`.
+
 ## 1.3.2 (2026-10-07)
 
 ### What's new

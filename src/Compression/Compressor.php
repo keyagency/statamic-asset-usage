@@ -130,7 +130,7 @@ class Compressor
         }
 
         try {
-            $image = $this->decode($bytes);
+            $image = ImageManagers::decode($this->manager, $bytes);
 
             if ($image->isAnimated()) {
                 return CompressionResult::failed(CompressionResult::UNSUPPORTED, $before, 'Animated images are not compressed.', $width, $height);
@@ -153,8 +153,8 @@ class Compressor
 
             $output = (string) $image->encode(match ($extension) {
                 'png' => new PngEncoder,
-                'webp' => self::encoder(WebpEncoder::class, ['quality' => $this->webpQuality, 'strip' => true]),
-                default => self::encoder(JpegEncoder::class, ['quality' => $this->jpgQuality, 'progressive' => true, 'strip' => true]),
+                'webp' => ImageManagers::encoder(WebpEncoder::class, ['quality' => $this->webpQuality, 'strip' => true]),
+                default => ImageManagers::encoder(JpegEncoder::class, ['quality' => $this->jpgQuality, 'progressive' => true, 'strip' => true]),
             });
 
             unset($image);
@@ -183,28 +183,6 @@ class Compressor
             ColorProfile::embedded($bytes) && ! ColorProfile::embedded($output),
             bytes: $output,
         );
-    }
-
-    /**
-     * Intervention v4 renamed read() to decodeBinary(). Statamic allows both
-     * versions, so whichever this site has is used.
-     */
-    private function decode(string $bytes)
-    {
-        return method_exists($this->manager, 'decodeBinary')
-            ? $this->manager->decodeBinary($bytes)
-            : $this->manager->read($bytes);
-    }
-
-    /**
-     * An encoder with only the options its version knows: v3.9 has neither
-     * `strip` nor, for WebP, `progressive`, and passes metadata through.
-     */
-    private static function encoder(string $class, array $options): object
-    {
-        $known = array_map(fn ($parameter) => $parameter->getName(), (new \ReflectionMethod($class, '__construct'))->getParameters());
-
-        return new $class(...array_intersect_key($options, array_flip($known)));
     }
 
     /**

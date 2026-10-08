@@ -51,6 +51,9 @@ class ServiceProvider extends AddonServiceProvider
         'cp' => __DIR__.'/../routes/cp.php',
     ];
 
+    // Statamic would use the package name; the views follow the slug like the lang files do.
+    protected $viewNamespace = 'asset-usage';
+
     protected $fieldtypes = [
         AssetUsage::class,
     ];

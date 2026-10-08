@@ -5,6 +5,7 @@ namespace KeyAgency\AssetUsage\Compression;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\DriverInterface;
+use Intervention\Image\Interfaces\ImageInterface;
 use Intervention\Image\Interfaces\ImageManagerInterface;
 use League\Glide\ServerFactory;
 use Statamic\Facades\Blink;
@@ -56,5 +57,27 @@ final class ImageManagers
     public static function countsAgainstMemoryLimit(ImageManagerInterface $manager): bool
     {
         return self::driver($manager) instanceof GdDriver;
+    }
+
+    /**
+     * Intervention v4 renamed read() to decodeBinary(). Statamic allows both
+     * versions, so whichever this site has is used.
+     */
+    public static function decode(ImageManagerInterface $manager, string $bytes): ImageInterface
+    {
+        return method_exists($manager, 'decodeBinary')
+            ? $manager->decodeBinary($bytes)
+            : $manager->read($bytes);
+    }
+
+    /**
+     * An encoder with only the options its version knows: v3.9 has neither
+     * `strip` nor, for WebP, `progressive`, and passes metadata through.
+     */
+    public static function encoder(string $class, array $options): object
+    {
+        $known = array_map(fn ($parameter) => $parameter->getName(), (new \ReflectionMethod($class, '__construct'))->getParameters());
+
+        return new $class(...array_intersect_key($options, array_flip($known)));
     }
 }

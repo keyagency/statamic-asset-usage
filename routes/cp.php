@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use KeyAgency\AssetUsage\Http\Controllers\AssetUsageController;
 use KeyAgency\AssetUsage\Http\Controllers\CompressionController;
+use KeyAgency\AssetUsage\Http\Controllers\ExportController;
 use KeyAgency\AssetUsage\Http\Controllers\LogController;
 
 /*
@@ -21,6 +22,12 @@ Route::prefix('asset-usage')->name('asset-usage.')->group(function () {
     Route::get('status', [AssetUsageController::class, 'status'])->name('status');
     Route::delete('assets', [AssetUsageController::class, 'destroy'])->name('destroy');
     Route::delete('unused', [AssetUsageController::class, 'destroyUnused'])->name('destroy-unused');
+
+    Route::prefix('export')->name('export.')->group(function () {
+        Route::get('/', [ExportController::class, 'download'])->name('download');
+        Route::get('thumbnails', [ExportController::class, 'thumbnails'])->name('thumbnails');
+        Route::post('thumbnails', [ExportController::class, 'makeThumbnails'])->name('make-thumbnails');
+    });
 
     Route::prefix('compress')->name('compress.')->group(function () {
         Route::get('compare', [CompressionController::class, 'show'])->name('show');

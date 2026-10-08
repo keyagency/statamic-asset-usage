@@ -181,7 +181,7 @@ export default {
 </script>
 
 <template>
-    <div v-if="run || count" class="mb-4">
+    <div v-if="run || count || $slots.default" class="mb-4">
         <div
             v-if="run"
             class="flex flex-col gap-3 rounded-lg border border-gray-200 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-4 dark:border-gray-700"
@@ -214,14 +214,21 @@ export default {
 
         <!-- The same row as "Delete selected" and "Delete all unused" on the overview. -->
         <div v-else class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-                variant="primary"
-                :disabled="disabled || !selected.length"
-                :text="selectedText"
-                @click="confirm('selected')"
-            />
+            <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+                <Button
+                    v-if="count"
+                    variant="primary"
+                    :disabled="disabled || !selected.length"
+                    :text="selectedText"
+                    @click="confirm('selected')"
+                />
+
+                <!-- What else acts on the list, such as the PDF, which stays when nothing can be compressed. -->
+                <slot />
+            </div>
 
             <Button
+                v-if="count"
                 :disabled="disabled"
                 :text="`${__('asset-usage::messages.compress.all')} (${count})`"
                 @click="confirm('all')"
