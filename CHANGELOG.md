@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.5.0 (2026-10-12)
+
+### What's new
+- Dashboard widget with the number of unused assets, the images that can get smaller and the space freed. Add `'asset_usage'` to `widgets` in `config/statamic/cp.php`.
+
 ## 1.4.0 (2026-10-08)
 
 ### What's new

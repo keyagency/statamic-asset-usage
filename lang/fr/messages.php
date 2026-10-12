@@ -275,6 +275,16 @@ return [
         'page' => 'Page :page sur :pages',
     ],
 
+    'widget' => [
+        'unused' => '{0} asset inutilisé|{1} asset inutilisé|[2,*] assets inutilisés',
+        'total' => '{0} sur :total asset|{1} sur :total asset|[2,*] sur :total assets',
+        'compressible' => '{0} image à alléger|{1} image à alléger|[2,*] images à alléger',
+        'savable' => ':size au total',
+        'freed' => 'libérés au total',
+        'view_overview' => 'Voir la vue d’ensemble',
+        'failed' => 'Les chiffres n’ont pas pu être chargés.',
+    ],
+
     'errors' => [
         'stale_index' => 'Les données d’utilisation sont obsolètes. Actualisez-les avant de supprimer quoi que ce soit.',
         'no_usage_data' => 'Il n’y a pas encore de données d’utilisation, rien n’est donc connu comme inutilisé. Actualisez-les avant de supprimer quoi que ce soit.',

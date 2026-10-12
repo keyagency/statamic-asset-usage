@@ -275,6 +275,16 @@ return [
         'page' => 'Seite :page von :pages',
     ],
 
+    'widget' => [
+        'unused' => '{0} unbenutzte Assets|{1} unbenutztes Asset|[2,*] unbenutzte Assets',
+        'total' => '{0} von :total Assets|{1} von :total Asset|[2,*] von :total Assets',
+        'compressible' => '{0} Bilder können kleiner werden|{1} Bild kann kleiner werden|[2,*] Bilder können kleiner werden',
+        'savable' => 'zusammen :size',
+        'freed' => 'insgesamt freigegeben',
+        'view_overview' => 'Übersicht anzeigen',
+        'failed' => 'Die Zahlen konnten nicht geladen werden.',
+    ],
+
     'errors' => [
         'stale_index' => 'Die Nutzungsdaten sind veraltet. Aktualisiere sie, bevor du etwas löschst.',
         'no_usage_data' => 'Es gibt noch keine Nutzungsdaten, daher ist von nichts bekannt, dass es unbenutzt ist. Aktualisiere sie, bevor du etwas löschst.',

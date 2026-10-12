@@ -14,6 +14,7 @@ Asset Usage is a Statamic 6 Control Panel addon that shows where each asset is u
 - **Image compression** with a before and after comparison. The original is kept and can be restored.
 - **Log** of every compression and deletion, including the user who performed it.
 - **PDF export** of the current list, with thumbnails.
+- **Dashboard widget** with the number of unused assets, the images that can get smaller and the space freed. Add `'asset_usage'` to `widgets` in `config/statamic/cp.php`.
 - **Commands** for reporting, deleting and compressing from the command line.
 - **Translations** in English, Dutch, German, French, Spanish and Italian.
 
@@ -107,7 +108,7 @@ Every option is described in `config/statamic/asset-usage.php`.
 
 | Permission | Grants access to |
 |---|---|
-| View asset usage | The Overview on the Tools page. |
+| View asset usage | The Overview on the Tools page and the dashboard widget. |
 | Delete unused assets | Deleting from the Tools page. |
 | Compress images | The Compression page, compressing and restoring. Also requires Statamic's edit and upload permissions for the container. |
 | View log | The Log page. |
@@ -116,7 +117,7 @@ The Used in panel and the browser column follow Statamic's asset permissions. Th
 
 ## Support
 
-Found a bug or missing a feature? [Open an issue on GitHub](https://github.com/keyagency/statamic-asset-usage/issues). [CONTRIBUTING.md](CONTRIBUTING.md) lists what to include.
+Found a bug or missing a feature? [Open an issue on GitHub](https://github.com/keyagency/statamic-asset-usage/issues). [CONTRIBUTING.md](https://github.com/keyagency/statamic-asset-usage/blob/main/CONTRIBUTING.md) lists what to include.
 
 ## License
 

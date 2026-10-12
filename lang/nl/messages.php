@@ -275,6 +275,16 @@ return [
         'page' => 'Pagina :page van :pages',
     ],
 
+    'widget' => [
+        'unused' => '{0} ongebruikte assets|{1} ongebruikt asset|[2,*] ongebruikte assets',
+        'total' => '{0} van :total assets|{1} van :total asset|[2,*] van :total assets',
+        'compressible' => '{0} afbeeldingen kunnen kleiner|{1} afbeelding kan kleiner|[2,*] afbeeldingen kunnen kleiner',
+        'savable' => ':size samen',
+        'freed' => 'in totaal vrijgemaakt',
+        'view_overview' => 'Bekijk overzicht',
+        'failed' => 'De cijfers konden niet worden geladen.',
+    ],
+
     'errors' => [
         'stale_index' => 'De gebruiksgegevens zijn verouderd. Controleer opnieuw voordat je iets verwijdert.',
         'no_usage_data' => 'Er zijn nog geen gebruiksgegevens, dus van niets is bekend dat het ongebruikt is. Controleer eerst voordat je iets verwijdert.',

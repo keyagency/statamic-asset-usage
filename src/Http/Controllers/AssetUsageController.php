@@ -204,6 +204,37 @@ class AssetUsageController extends CpController
     }
 
     /**
+     * The numbers for the dashboard widget, over the containers the user can
+     * view. `unused` is null without usage data rather than zero, which would
+     * read as "nothing to clean up".
+     */
+    public function summary()
+    {
+        $this->authorizeView();
+
+        $store = new IndexStore;
+        $unused = Unused::make($store);
+        $log = new AssetLog;
+        $entries = $log->visibleTo(User::current());
+
+        // Everything the user can see: the overview's filters in the query string don't apply here.
+        $everything = new Request;
+
+        return [
+            'index' => $this->indexState($store),
+            'unused' => $unused->hasUsageData() ? count($this->unusedIds($everything, $unused, $unused->index())) : null,
+            'assets' => count($this->filter($everything, $unused->containers(), $unused->index(), usage: 'all')),
+            'compression' => Settings::compressionEnabled() && $this->canCompress() && Requirements::available()
+                ? Status::make($this->analyzer())->toArray($entries)
+                : null,
+            'log' => [
+                'compression' => $log->compressionTotals($entries),
+                'deletions' => $log->deletionTotals($entries),
+            ],
+        ];
+    }
+
+    /**
      * Delete assets, one or many. Nothing is taken on trust: the index has to
      * be current, and every asset is re-checked against the same rails the
      * command uses before its file is removed.

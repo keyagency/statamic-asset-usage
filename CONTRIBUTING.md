@@ -86,6 +86,7 @@ On PHP 8.2 Composer installs Intervention Image v3 (with Glide 3), on newer PHP 
 - Other user-facing strings live in `lang/{locale}/messages.php` (English, Dutch, German, French, Spanish and Italian). Add keys to every locale and don't inline literals. `TranslationsTest` fails when a locale is missing a key, a plural segment or a placeholder. Related strings are grouped under their own array key (`index`, `filters`, `columns`, `delete`, `compress`, `log`, `export`, `nav`, `errors`, …) rather than prefixed.
 - Config is read through `Support\Settings`, not scattered `config()` calls.
 - Statamic's toasts render their message as HTML. Text users control, such as a file path or a message from the server, goes through `escapeHtml()` from `resources/js/support/formatting.js` before it reaches `$toast`.
+- Statamic's own Tailwind utilities outrank the addon's, so a responsive variant can't override a base class core also ships: `flex` with `@xl:block` stays `flex`. Give each property one class per state instead, such as `@max-xl/widget:text-lg @xl/widget:text-2xl`.
 - A new config key needs an update script in `src/UpdateScripts/` that adds it to configs sites have already published. Its `isUpdatingTo()` version has to be the version you tag, or it never runs; AGENTS.md has the details.
 
 Five rules are easy to break; please preserve them:

@@ -275,6 +275,16 @@ return [
         'page' => 'Pagina :page di :pages',
     ],
 
+    'widget' => [
+        'unused' => '{0} asset non usati|{1} asset non usato|[2,*] asset non usati',
+        'total' => '{0} su :total asset|{1} su :total asset|[2,*] su :total asset',
+        'compressible' => '{0} immagini possono diventare più leggere|{1} immagine può diventare più leggera|[2,*] immagini possono diventare più leggere',
+        'savable' => ':size in totale',
+        'freed' => 'liberati in totale',
+        'view_overview' => 'Vedi panoramica',
+        'failed' => 'Non è stato possibile caricare i numeri.',
+    ],
+
     'errors' => [
         'stale_index' => 'I dati di utilizzo non sono aggiornati. Aggiornali prima di eliminare qualcosa.',
         'no_usage_data' => 'Non ci sono ancora dati di utilizzo, quindi di nulla si sa che non è usato. Aggiornali prima di eliminare qualcosa.',

@@ -275,6 +275,16 @@ return [
         'page' => 'Page :page of :pages',
     ],
 
+    'widget' => [
+        'unused' => '{0} unused assets|{1} unused asset|[2,*] unused assets',
+        'total' => '{0} of :total assets|{1} of :total asset|[2,*] of :total assets',
+        'compressible' => '{0} images can get smaller|{1} image can get smaller|[2,*] images can get smaller',
+        'savable' => ':size together',
+        'freed' => 'freed in total',
+        'view_overview' => 'View overview',
+        'failed' => 'The numbers could not be loaded.',
+    ],
+
     'errors' => [
         'stale_index' => 'The usage data is out of date. Refresh it before deleting anything.',
         'no_usage_data' => 'There is no usage data yet, so nothing is known to be unused. Refresh it before deleting anything.',

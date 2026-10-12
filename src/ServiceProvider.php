@@ -19,6 +19,7 @@ use KeyAgency\AssetUsage\Listeners\UpdateUsageIndex;
 use KeyAgency\AssetUsage\Query\Scopes\Filters\AssetUsage as UsageFilter;
 use KeyAgency\AssetUsage\Support\NavIcon;
 use KeyAgency\AssetUsage\Support\Settings;
+use KeyAgency\AssetUsage\Widgets\AssetUsage as UsageWidget;
 use Statamic\Events\AssetContainerBlueprintFound;
 use Statamic\Events\AssetReuploaded;
 use Statamic\Events\AssetUploaded;
@@ -60,6 +61,10 @@ class ServiceProvider extends AddonServiceProvider
 
     protected $scopes = [
         UsageFilter::class,
+    ];
+
+    protected $widgets = [
+        UsageWidget::class,
     ];
 
     protected $commands = [

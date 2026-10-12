@@ -52,12 +52,16 @@ class Status
         return Arr::except(Requirements::check(), 'error');
     }
 
-    /** What compressing saved, over the containers the current user can see. */
-    private static function compressionTotals(): array
+    /**
+     * What compressing saved, over the containers the current user can see.
+     *
+     * @param  array|null  $entries  those log entries when the caller has read them already
+     */
+    private static function compressionTotals(?array $entries = null): array
     {
         $log = new AssetLog;
 
-        return $log->compressionTotals($log->visibleTo(User::current()));
+        return $log->compressionTotals($entries ?? $log->visibleTo(User::current()));
     }
 
     /** The toArray() of a fresh Status, or unavailable() when the driver is missing. */
@@ -77,8 +81,11 @@ class Status
      * Counted against the current settings but not the file version: telling
      * a replaced file apart would mean hydrating every asset, and a replace
      * queues its own analysis anyway.
+     *
+     * @param  array|null  $logEntries  the log entries the current user can see, when the caller
+     *                                  has read them already; the log is read in full each time
      */
-    public function toArray(): array
+    public function toArray(?array $logEntries = null): array
     {
         $meta = $this->store->meta();
         $records = array_filter($this->store->records(), fn (array $record) => ($record['settings'] ?? null) === $this->fingerprint);
@@ -104,7 +111,7 @@ class Status
             'savable_bytes' => array_sum(array_map(fn (array $record) => $record['before_bytes'] - $record['after_bytes'], $compressible)),
             'threshold' => $threshold,
             'sync_queue' => config('queue.default') === 'sync',
-            'log' => self::compressionTotals(),
+            'log' => self::compressionTotals($logEntries),
         ];
     }
 

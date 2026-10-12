@@ -3,6 +3,7 @@ import Compress from './pages/Compress.vue'
 import AssetLog from './pages/AssetLog.vue'
 import AssetUsageFieldtype from './fieldtypes/AssetUsageFieldtype.vue'
 import AssetUsageIndexFieldtype from './fieldtypes/AssetUsageIndexFieldtype.vue'
+import AssetUsageWidget from './widgets/AssetUsageWidget.vue'
 
 Statamic.booting(() => {
     Statamic.$inertia.register('asset-usage::AssetUsage', AssetUsage)
@@ -16,4 +17,7 @@ Statamic.booting(() => {
      */
     Statamic.$components.register('asset_usage-fieldtype', AssetUsageFieldtype)
     Statamic.$components.register('asset_usage-fieldtype-index', AssetUsageIndexFieldtype)
+
+    // The name Widgets\AssetUsage::component() renders; a mismatch leaves the widget silently empty.
+    Statamic.$components.register('asset-usage-widget', AssetUsageWidget)
 })
