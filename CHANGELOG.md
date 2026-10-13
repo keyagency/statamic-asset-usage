@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.5.1 (2026-10-13)
+
+### What's fixed
+- The table on the Log page fits on a laptop screen, and file names wrap at hyphens instead of mid-word.
+
 ## 1.5.0 (2026-10-12)
 
 ### What's new

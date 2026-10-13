@@ -158,9 +158,10 @@ export default {
                             class="border-b border-gray-200 last:border-b-0 dark:border-gray-700"
                             :class="{ 'opacity-60': entry.restored_at }"
                         >
-                            <td class="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400" v-text="date(entry.at)" />
+                            <!-- No column takes the full width, so on a laptop the date and status wrap instead of pushing the table past the card. -->
+                            <td class="min-w-44 px-4 py-2.5 text-gray-600 dark:text-gray-400" v-text="date(entry.at)" />
 
-                            <td class="w-full px-4 py-2.5">
+                            <td class="px-4 py-2.5">
                                 <div class="flex min-w-56 items-center gap-3">
                                     <img
                                         v-if="entry.thumbnail"
@@ -170,13 +171,13 @@ export default {
                                     />
                                     <a
                                         v-if="entry.edit_url"
-                                        class="font-medium break-all hover:underline"
+                                        class="font-medium wrap-anywhere hover:underline"
                                         :href="entry.edit_url"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         v-text="entry.path"
                                     />
-                                    <span v-else class="break-all">
+                                    <span v-else class="wrap-anywhere">
                                         <span class="font-medium" v-text="entry.path" />
                                         <span
                                             v-if="entry.type === 'compressed'"
@@ -213,7 +214,7 @@ export default {
                                 </template>
                             </td>
 
-                            <td class="px-4 py-2.5 whitespace-nowrap">
+                            <td class="min-w-40 px-4 py-2.5">
                                 <template v-if="entry.type === 'compressed'">
                                     <!-- Only the command line is worth saying: every other compression happens on the Tools page. -->
                                     <div
