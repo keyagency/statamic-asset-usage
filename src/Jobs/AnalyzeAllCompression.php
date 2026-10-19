@@ -11,8 +11,11 @@ use Illuminate\Support\Str;
 use KeyAgency\AssetUsage\Compression\AnalysisStore;
 use KeyAgency\AssetUsage\Compression\Compressor;
 use KeyAgency\AssetUsage\Compression\Requirements;
+use KeyAgency\AssetUsage\Support\Run;
+use KeyAgency\AssetUsage\Support\Runs;
 use KeyAgency\AssetUsage\Usage\Containers;
 use Statamic\Facades\Blink;
+use Throwable;
 
 /**
  * Starts a full analysis: splits every compressible image in the enabled
@@ -27,21 +30,52 @@ class AnalyzeAllCompression implements ShouldQueue
 
     public $tries = 1;
 
-    public function __construct(public bool $force = false) {}
+    /** @param  string|null  $run  the run started when this was dispatched */
+    public function __construct(public bool $force = false, public ?string $run = null) {}
+
+    /**
+     * Flagged as analysing before anything is queued, so the CP says so right
+     * away instead of only once a worker picks it up.
+     */
+    public static function start(bool $force = false): void
+    {
+        $run = (new AnalysisStore)->markPreparing(Compressor::make()->fingerprint());
+
+        Runs::dispatch(new self($force, $run));
+    }
 
     public function handle(): void
     {
-        if (! Requirements::available()) {
+        // Stopped, or replaced by a newer run, before a worker got to it.
+        if ($this->run !== null && Run::analysis()->isOver($this->run, (new AnalysisStore)->cancel(...))) {
             return;
         }
 
+        if (! Requirements::available()) {
+            $this->failed();
+
+            return;
+        }
+
+        Runs::raiseTimeLimit();
+
         $batches = self::batches();
 
-        (new AnalysisStore)->markAnalyzing($batches, Compressor::make()->fingerprint());
+        $run = (new AnalysisStore)->markAnalyzing($batches, Compressor::make()->fingerprint(), $this->run);
 
         foreach ($batches as $id => $ids) {
-            AnalyzeCompression::dispatch($ids, $id, $this->force);
+            AnalyzeCompression::dispatch($ids, $id, $this->force, $run);
         }
+    }
+
+    public function failed(?Throwable $exception = null): void
+    {
+        if ($this->run === null || ! Run::analysis()->isCurrent($this->run)) {
+            return;
+        }
+
+        Run::analysis()->fail($this->run, $exception?->getMessage());
+        (new AnalysisStore)->cancel();
     }
 
     /**

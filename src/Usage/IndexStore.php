@@ -5,6 +5,7 @@ namespace KeyAgency\AssetUsage\Usage;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
+use KeyAgency\AssetUsage\Support\Run;
 use KeyAgency\AssetUsage\Support\Settings;
 use Statamic\Facades\Blink;
 
@@ -95,9 +96,14 @@ class IndexStore
         ];
     }
 
+    /**
+     * Flagged as building with a run that is still alive. A build that died
+     * leaves the flag behind, which then reads as an index that can't be
+     * trusted rather than one that is being built forever.
+     */
     public function isBuilding(): bool
     {
-        return $this->meta()['state'] === self::STATE_BUILDING;
+        return $this->meta()['state'] === self::STATE_BUILDING && Run::index()->isRunning();
     }
 
     /**
@@ -179,9 +185,8 @@ class IndexStore
 
             $callback($index);
 
-            $this->put(array_merge($payload ?? [], [
-                'items_scanned' => $index->itemCount(),
-            ], $index->toArray()));
+            // items_scanned stays what the last full build counted: the build's progress is estimated from it.
+            $this->put(array_merge($payload ?? [], $index->toArray()));
         });
     }
 
@@ -199,6 +204,31 @@ class IndexStore
             ]);
 
             $this->put(array_merge($payload, ['state' => self::STATE_BUILDING]));
+        });
+    }
+
+    /**
+     * Back to how it was before the build started: the index it had, which
+     * content saves kept current meanwhile, or none at all.
+     */
+    public function cancelBuilding(): void
+    {
+        $this->locked(function () {
+            $this->forgetCached();
+
+            $payload = $this->payload();
+
+            if ($payload === null || ($payload['state'] ?? null) !== self::STATE_BUILDING) {
+                return;
+            }
+
+            if (($payload['built_at'] ?? null) === null) {
+                $this->delete();
+
+                return;
+            }
+
+            $this->put(array_merge($payload, ['state' => self::STATE_READY]));
         });
     }
 

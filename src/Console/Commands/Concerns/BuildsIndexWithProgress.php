@@ -14,7 +14,7 @@ trait BuildsIndexWithProgress
      * How many there are is only known once they all have been, so the bar
      * counts up instead of towards an end.
      *
-     * @return array{0: UsageIndex, 1: int} the index and the number of items scanned
+     * @return array{0: UsageIndex|null, 1: int} the index, null when it was stopped from the CP, and the number of items scanned
      */
     private function buildIndexWithProgress(): array
     {

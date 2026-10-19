@@ -3,6 +3,7 @@
 namespace KeyAgency\AssetUsage\Tests\Feature;
 
 use Illuminate\Support\Facades\Artisan;
+use KeyAgency\AssetUsage\Support\Run;
 use KeyAgency\AssetUsage\Tests\TestCase;
 use KeyAgency\AssetUsage\Usage\IndexBuilder;
 use KeyAgency\AssetUsage\Usage\IndexStore;
@@ -20,6 +21,20 @@ class DoctorCommandTest extends TestCase
         $this->artisan('statamic:asset-usage:doctor')
             ->expectsOutputToContain('Container: assets')
             ->expectsOutputToContain('Asset query (what this addon indexes)')
+            ->assertSuccessful();
+    }
+
+    /** What a site stuck on "checking" needs to know first: whether a worker ever picked the rebuild up. */
+    #[Test]
+    public function it_says_why_the_last_rebuild_did_not_finish()
+    {
+        $this->makeContainer('assets', ['root.jpg']);
+        IndexBuilder::startRun(new IndexStore);
+
+        $this->travel(Run::STALL_MINUTES + 1)->minutes();
+
+        $this->artisan('statamic:asset-usage:doctor')
+            ->expectsOutputToContain('never picked up by a queue worker')
             ->assertSuccessful();
     }
 

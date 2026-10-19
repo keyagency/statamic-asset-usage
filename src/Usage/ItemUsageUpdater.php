@@ -26,10 +26,9 @@ final class ItemUsageUpdater
             return;
         }
 
+        // Dispatched as it is rather than after the response: what follows the save expects the index to be there.
         if (! $this->store->exists()) {
-            $this->store->markBuilding();
-
-            BuildIndex::dispatch();
+            BuildIndex::dispatch(IndexBuilder::startRun($this->store));
 
             return;
         }

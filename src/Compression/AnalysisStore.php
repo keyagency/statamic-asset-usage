@@ -2,9 +2,9 @@
 
 namespace KeyAgency\AssetUsage\Compression;
 
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
+use KeyAgency\AssetUsage\Support\Run;
 use Statamic\Facades\Blink;
 
 /**
@@ -23,9 +23,6 @@ class AnalysisStore
     public const STATE_READY = 'ready';
 
     public const STATE_ANALYZING = 'analyzing';
-
-    /** A run that hasn't finished in this long is assumed to have died. */
-    private const ANALYZING_TIMEOUT_HOURS = 6;
 
     public function directory(): string
     {
@@ -94,13 +91,10 @@ class AnalysisStore
         return $record;
     }
 
+    /** Flagged as analysing with a run that is still alive; one that died leaves only the flag. */
     public function isAnalyzing(): bool
     {
-        $meta = $this->meta();
-
-        return $meta['state'] === self::STATE_ANALYZING
-            && $meta['started_at'] !== null
-            && Carbon::parse($meta['started_at'])->gt(now()->subHours(self::ANALYZING_TIMEOUT_HOURS));
+        return $this->meta()['state'] === self::STATE_ANALYZING && Run::analysis()->isRunning();
     }
 
     /**
@@ -116,9 +110,13 @@ class AnalysisStore
     /**
      * Flags a run before its batches are known, so the CP says it is running
      * the moment the button is pressed rather than once a worker gets to it.
+     *
+     * @return string the run it starts
      */
-    public function markPreparing(string $fingerprint): void
+    public function markPreparing(string $fingerprint): string
     {
+        $run = Run::analysis()->start();
+
         $this->locked(function () use ($fingerprint) {
             $this->put(array_merge($this->payload(), [
                 'state' => self::STATE_ANALYZING,
@@ -127,6 +125,8 @@ class AnalysisStore
                 'batches' => [],
             ]));
         });
+
+        return $run;
     }
 
     /**
@@ -138,9 +138,20 @@ class AnalysisStore
      * out (deleted, or in a container that was switched off) are dropped here.
      *
      * @param  array<string, string[]>  $batches  asset ids per batch id
+     * @param  string|null  $run  the run markPreparing() started; without one it starts its own
+     * @return string the run
      */
-    public function markAnalyzing(array $batches, string $fingerprint): void
+    public function markAnalyzing(array $batches, string $fingerprint, ?string $run = null): string
     {
+        $total = array_sum(array_map('count', $batches));
+        $runs = Run::analysis();
+
+        if ($run === null) {
+            $run = $runs->start($total);
+        } else {
+            $runs->beat($run, 0, $total, force: true);
+        }
+
         $this->locked(function () use ($batches, $fingerprint) {
             $payload = $this->payload();
             $payload['records'] = array_intersect_key($payload['records'] ?? [], array_flip(array_merge([], ...array_values($batches))));
@@ -151,6 +162,27 @@ class AnalysisStore
                 'settings' => $fingerprint,
                 'batches' => array_keys($batches),
             ] + ($batches ? [] : ['analyzed_at' => now()->toIso8601String()])));
+        });
+
+        if (! $batches) {
+            $runs->finish($run);
+        }
+
+        return $run;
+    }
+
+    /**
+     * Ends a run before its last batch. What it analysed so far stays: each
+     * record is as good as it would have been at the end of the run.
+     */
+    public function cancel(): void
+    {
+        $this->locked(function () {
+            if (($this->payload()['state'] ?? null) !== self::STATE_ANALYZING) {
+                return;
+            }
+
+            $this->put(array_merge($this->payload(), ['state' => self::STATE_READY, 'batches' => []]));
         });
     }
 
@@ -183,7 +215,9 @@ class AnalysisStore
      */
     public function store(array $records, ?string $batch = null): void
     {
-        $this->locked(function () use ($records, $batch) {
+        $finished = false;
+
+        $this->locked(function () use ($records, $batch, &$finished) {
             $payload = $this->payload();
             $payload['records'] = array_merge($payload['records'] ?? [], $records);
 
@@ -195,11 +229,17 @@ class AnalysisStore
                 if ($payload['batches'] === []) {
                     $payload['state'] = self::STATE_READY;
                     $payload['analyzed_at'] = now()->toIso8601String();
+                    $finished = true;
                 }
             }
 
             $this->put($payload);
         });
+
+        // Only the current run has batches to strike off, so this can't end a newer one.
+        if ($finished) {
+            Run::analysis()->finish();
+        }
     }
 
     /**

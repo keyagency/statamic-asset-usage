@@ -7,6 +7,7 @@ use KeyAgency\AssetUsage\Compression\Analyzer;
 use KeyAgency\AssetUsage\Compression\Requirements;
 use KeyAgency\AssetUsage\Compression\Status;
 use KeyAgency\AssetUsage\Jobs\AnalyzeAllCompression;
+use KeyAgency\AssetUsage\Support\Run;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use Statamic\Console\RunsInPlease;
@@ -54,7 +55,7 @@ class AnalyzeCommand extends Command
         }
 
         if ($this->option('queue')) {
-            AnalyzeAllCompression::dispatch((bool) $this->option('force'));
+            AnalyzeAllCompression::start((bool) $this->option('force'));
 
             $this->components->info('Analysis dispatched to the queue.');
 
@@ -69,9 +70,9 @@ class AnalyzeCommand extends Command
          * One container is only part of the images, so the analysis as a whole
          * keeps its date, its settings and the results of the other containers.
          */
-        if (! $container) {
-            $analyzer->store()->markAnalyzing($batches, $analyzer->compressor()->fingerprint());
-        }
+        $run = $container ? null : $analyzer->store()->markAnalyzing($batches, $analyzer->compressor()->fingerprint());
+        $runs = Run::analysis();
+        $stopped = false;
 
         $this->components->info(sprintf('Analysing %d %s.', $total, Str::plural('image', $total)));
 
@@ -85,12 +86,28 @@ class AnalyzeCommand extends Command
             try {
                 $assets = collect($ids)->map(fn (string $id) => Asset::find($id))->filter();
 
-                $analyzer->analyze($assets, (bool) $this->option('force'), $container ? null : $batch, fn () => $bar->advance());
+                // The run shows its progress in the CP too, which can stop it.
+                $analyzer->analyze($assets, (bool) $this->option('force'), $container ? null : $batch, function () use ($bar, $run, $runs, &$stopped) {
+                    $bar->advance();
+
+                    $stopped = $run !== null && ! $runs->beat($run, $bar->getProgress());
+
+                    return ! $stopped;
+                });
             } catch (Throwable $e) {
                 // Struck off anyway, so one bad batch can't leave the run "analysing".
                 $container || $analyzer->store()->store([], $batch);
                 report($e);
                 $failed++;
+            }
+
+            if ($stopped) {
+                $runs->isOver($run, $analyzer->store()->cancel(...));
+
+                $this->newLine(2);
+                $this->components->warn('The analysis was stopped from the Control Panel or replaced by a newer one.');
+
+                return self::FAILURE;
             }
 
             // A missing asset or a failed batch still counts, so the bar ends full.

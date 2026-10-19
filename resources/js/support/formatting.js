@@ -60,3 +60,8 @@ export function parts(text) {
         .filter(Boolean)
         .map(part => (part.startsWith(OPEN) ? { text: part.slice(1, -1), marked: true } : { text: part, marked: false }))
 }
+
+/** A count with the locale's thousands separator. */
+export function formatNumber(number) {
+    return new Intl.NumberFormat(formattingLocale()).format(number)
+}

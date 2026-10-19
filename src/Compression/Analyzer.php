@@ -141,22 +141,28 @@ class Analyzer
      * are skipped unless forced.
      *
      * @param  iterable<Asset>  $assets
-     * @param  callable|null  $progress  called after each asset, skipped ones included
+     * @param  callable|null  $progress  called after each asset, skipped ones included; returning false stops the batch
      */
     public function analyze(iterable $assets, bool $force = false, ?string $batch = null, ?callable $progress = null): int
     {
         $records = [];
+        $stopped = false;
 
         foreach ($assets as $asset) {
             if (self::applies($asset) && ($force || ! $this->fresh($asset))) {
                 $records[$asset->id()] = $this->record($asset, $this->compress($asset));
             }
 
-            $progress && $progress($asset);
+            if ($progress && $progress($asset) === false) {
+                $stopped = true;
+
+                break;
+            }
         }
 
-        if ($records || $batch !== null) {
-            $this->store->store($records, $batch);
+        // A stopped batch keeps what it found, but isn't struck off: the run it belonged to is over.
+        if ($records || ($batch !== null && ! $stopped)) {
+            $this->store->store($records, $stopped ? null : $batch);
         }
 
         return count($records);

@@ -14,6 +14,7 @@ use KeyAgency\AssetUsage\Log\AssetLog;
 use KeyAgency\AssetUsage\Log\Source;
 use KeyAgency\AssetUsage\Support\ImageDensity;
 use KeyAgency\AssetUsage\Support\NavIcon;
+use KeyAgency\AssetUsage\Support\Run;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\IndexStore;
@@ -75,6 +76,7 @@ class AssetUsageController extends CpController
             'canDelete' => $this->canDelete(),
             'assetsUrl' => cp_route('asset-usage.assets'),
             'rebuildUrl' => cp_route('asset-usage.rebuild'),
+            'stopUrl' => cp_route('asset-usage.stop'),
             'statusUrl' => cp_route('asset-usage.status'),
             'destroyUrl' => cp_route('asset-usage.destroy'),
             'destroyUnusedUrl' => cp_route('asset-usage.destroy-unused'),
@@ -90,6 +92,7 @@ class AssetUsageController extends CpController
             'compressionEnabled' => Settings::compressionEnabled(),
             'canCompress' => Settings::compressionEnabled() && $this->canCompress(),
             'analyzeUrl' => cp_route('asset-usage.compress.analyze'),
+            'analyzeStopUrl' => cp_route('asset-usage.compress.analyze.stop'),
             'compressionStatusUrl' => cp_route('asset-usage.compress.status'),
             'compressUrl' => cp_route('asset-usage.compress.show'),
             'compressAllUrl' => cp_route('asset-usage.compress.all'),
@@ -170,10 +173,9 @@ class AssetUsageController extends CpController
     }
 
     /**
-     * Flagged as building before the job is dispatched, so a queued rebuild is
-     * visible to the CP right away instead of only once a worker picks it up.
-     * Under the sync connection the job has already finished by the time we
-     * report back, which is what decides the wording.
+     * Starts a rebuild unless one is running already, which a second tab or a
+     * double click would otherwise start twice. Without a queue worker it runs
+     * after the response, so the page can show its progress either way.
      */
     public function rebuild()
     {
@@ -181,18 +183,34 @@ class AssetUsageController extends CpController
 
         $store = new IndexStore;
 
-        $store->markBuilding();
-
-        BuildIndex::dispatch();
-
-        $state = $this->indexState($store);
+        if (! $store->isBuilding()) {
+            BuildIndex::start();
+        }
 
         return [
             'success' => true,
-            'message' => $state['building']
-                ? __('asset-usage::messages.index.refresh_started')
-                : __('asset-usage::messages.index.refreshed'),
-            'index' => $state,
+            'message' => __('asset-usage::messages.index.refresh_started'),
+            'index' => $this->indexState($store),
+        ];
+    }
+
+    /**
+     * The index goes back to how it was before the rebuild started. A busy
+     * rebuild does that itself once it notices, so the page keeps checking.
+     */
+    public function stop()
+    {
+        $this->authorizeView();
+
+        $store = new IndexStore;
+
+        if (Run::index()->stop()) {
+            $store->cancelBuilding();
+        }
+
+        return [
+            'message' => __('asset-usage::messages.index.stopped'),
+            'index' => $this->indexState($store),
         ];
     }
 
@@ -431,6 +449,9 @@ class AssetUsageController extends CpController
             'built_at' => $meta['built_at'],
             'built_at_relative' => $builtAt?->diffForHumans(),
             'items_scanned' => $meta['items_scanned'],
+            'progress' => Run::index()->progress(),
+            /** Why the last rebuild didn't finish, unless one is running or finished since. */
+            'failure' => $store->isBuilding() ? null : Run::index()->failure($meta['state'] === IndexStore::STATE_BUILDING),
         ];
     }
 

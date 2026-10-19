@@ -4,6 +4,7 @@ namespace KeyAgency\AssetUsage\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use KeyAgency\AssetUsage\Compression\AnalysisStore;
 use KeyAgency\AssetUsage\Compression\Analyzer;
 use KeyAgency\AssetUsage\Compression\BackupFailed;
 use KeyAgency\AssetUsage\Compression\CompressionService;
@@ -14,6 +15,7 @@ use KeyAgency\AssetUsage\Compression\Status;
 use KeyAgency\AssetUsage\Http\Controllers\Concerns\AuthorizesAssetUsage;
 use KeyAgency\AssetUsage\Jobs\AnalyzeAllCompression;
 use KeyAgency\AssetUsage\Support\NavIcon;
+use KeyAgency\AssetUsage\Support\Run;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\Reference;
@@ -248,12 +250,34 @@ class CompressionController extends CpController
         $analyzer = Analyzer::make();
 
         if (! $analyzer->store()->isAnalyzing()) {
-            $analyzer->store()->markPreparing($analyzer->compressor()->fingerprint());
-
-            AnalyzeAllCompression::dispatch();
+            AnalyzeAllCompression::start();
         }
 
-        return ['compression' => Status::current($analyzer)];
+        return [
+            'message' => __('asset-usage::messages.compress.analyze_started'),
+            'compression' => Status::current($analyzer),
+        ];
+    }
+
+    /**
+     * What was analysed so far stays. A busy batch saves what it has and
+     * ends the run itself, so the page keeps checking until it has; batches
+     * still waiting in the queue end without doing anything.
+     */
+    public function stop()
+    {
+        $this->authorizeCompress();
+
+        abort_unless(Settings::compressionEnabled(), 404);
+
+        if (Run::analysis()->stop()) {
+            (new AnalysisStore)->cancel();
+        }
+
+        return [
+            'message' => __('asset-usage::messages.compress.analyze_stopped'),
+            'compression' => Status::current(),
+        ];
     }
 
     public function status()

@@ -281,23 +281,27 @@ class ToolsPageTest extends TestCase
         $this->makeEntry('home', ['title' => 'Home', 'hero' => 'img/photo.jpg']);
 
         /*
-         * On the sync connection the rebuild is finished by the time the
-         * response lands, so it may not report itself as still running.
+         * On the sync connection the rebuild runs after the response, so the
+         * page can show its progress. It is done once the request has ended.
          */
         $this->actingAs($this->superUser())
             ->postJson(cp_route('asset-usage.rebuild'))
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('index.building', false)
-            ->assertJsonPath('index.stale', false)
-            ->assertJsonPath('message', __('asset-usage::messages.index.refreshed'));
+            ->assertJsonPath('index.building', true)
+            ->assertJsonPath('message', __('asset-usage::messages.index.refresh_started'));
 
-        $this->assertTrue((new IndexStore)->indexOrEmpty()->isUsed('assets::img/photo.jpg'));
+        $store = new IndexStore;
+
+        $this->assertFalse($store->isBuilding());
+        $this->assertFalse($store->isStale());
+        $this->assertTrue($store->indexOrEmpty()->isUsed('assets::img/photo.jpg'));
     }
 
     #[Test]
     public function a_queued_rebuild_reports_itself_as_running()
     {
+        config(['queue.default' => 'database']);
         Queue::fake();
 
         $this->makeContainer('assets', ['img/photo.jpg']);

@@ -9,6 +9,7 @@ use KeyAgency\AssetUsage\Compression\Backups;
 use KeyAgency\AssetUsage\Compression\Compressor;
 use KeyAgency\AssetUsage\Compression\ImageManagers;
 use KeyAgency\AssetUsage\Compression\Requirements;
+use KeyAgency\AssetUsage\Support\Run;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use KeyAgency\AssetUsage\Usage\IndexStore;
@@ -50,6 +51,8 @@ class DoctorCommand extends Command
         $this->components->twoColumnDetail('Usage data', $store->exists()
             ? ($store->isStale() ? '<comment>out of date</comment>' : 'up to date')
             : '<comment>not built yet</comment>');
+        $this->components->twoColumnDetail('Rebuild', $this->describeRun(Run::index()));
+        $this->components->twoColumnDetail('Queue connection', (string) config('queue.default'));
         $this->components->twoColumnDetail('Stache watcher', config('statamic.stache.watcher') ? 'on' : 'off (listings are cached)');
         $this->components->twoColumnDetail('Scanned types', implode(', ', Settings::scannedTypes()));
         $this->reportUnconfiguredTypes();
@@ -152,7 +155,28 @@ class DoctorCommand extends Command
         $analyzedAt = (new AnalysisStore)->meta()['analyzed_at'];
 
         $this->components->twoColumnDetail('Compression analysed', $analyzedAt ?? '<comment>never</comment>');
+        $this->components->twoColumnDetail('Analysis', $this->describeRun(Run::analysis()));
         $this->components->twoColumnDetail('Kept originals', Str::fileSizeForHumans((new Backups)->totalBytes(), 1));
+    }
+
+    /** Whether a rebuild or an analysis is running, and why the last one didn't finish. */
+    private function describeRun(Run $run): string
+    {
+        if ($progress = $run->progress()) {
+            return 'running, '.$progress['done'].($progress['total'] ? ' of '.($progress['estimated'] ? 'about ' : '').$progress['total'] : '').' done';
+        }
+
+        if (! $failure = $run->failure()) {
+            return 'not running';
+        }
+
+        $why = match ($failure['reason']) {
+            'not_started' => 'never picked up by a queue worker',
+            'stalled' => 'stopped responding halfway',
+            default => $failure['message'] ?? 'failed',
+        };
+
+        return '<comment>last one did not finish ('.$failure['at'].'): '.$why.'</comment>';
     }
 
     private function pngquantVersion(string $binary): string

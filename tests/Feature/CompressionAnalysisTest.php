@@ -190,6 +190,7 @@ class CompressionAnalysisTest extends TestCase
     #[Test]
     public function the_analyse_button_says_it_is_running_before_a_worker_picks_it_up()
     {
+        config(['queue.default' => 'database']);
         Queue::fake();
 
         $response = $this->actingAs($this->superUser())->postJson(cp_route('asset-usage.compress.analyze'));
@@ -200,13 +201,18 @@ class CompressionAnalysisTest extends TestCase
     }
 
     #[Test]
-    public function on_the_sync_queue_the_analysis_is_done_when_the_button_returns()
+    public function on_the_sync_queue_the_analysis_runs_after_the_response()
     {
-        $response = $this->actingAs($this->superUser())->postJson(cp_route('asset-usage.compress.analyze'));
+        $user = $this->superUser();
+        $response = $this->actingAs($user)->postJson(cp_route('asset-usage.compress.analyze'));
 
-        $this->assertFalse($response->json('compression.analyzing'));
-        $this->assertNotNull($response->json('compression.analyzed_at'));
-        $this->assertSame(1, $response->json('compression.compressible'));
+        $this->assertTrue($response->json('compression.analyzing'));
+
+        $status = $this->actingAs($user)->getJson(cp_route('asset-usage.compress.status'))->json('compression');
+
+        $this->assertFalse($status['analyzing']);
+        $this->assertNotNull($status['analyzed_at']);
+        $this->assertSame(1, $status['compressible']);
     }
 
     #[Test]

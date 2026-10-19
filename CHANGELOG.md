@@ -1,5 +1,22 @@
 # Release Notes
 
+## 1.6.0 (2026-10-19)
+
+### What's new
+- Progress on the Overview and the Compression page while the usage data is checked or images are analysed, also after reloading the page.
+- The check and the analysis can be stopped. Stopping the check keeps the usage data as it was; stopping the analysis keeps what was analysed so far.
+
+### What's changed
+- The Overview and the Compression page show the list, its filters and its buttons only once there is something to list: after the first check, or the first analysis.
+
+### What's fixed
+- A check or analysis that died (no queue worker, out of memory or time) showed as running forever. After 15 minutes without progress the page now says it did not finish and why, and so does `asset-usage:doctor`.
+- The "Refresh usage data" button could be pressed again while a check was running.
+- Before the first check, the Overview spoke of "this asset", or of usage data collected for other settings.
+
+### What's improved
+- Without a queue worker, the check and the analysis run after the response. The page follows their progress either way, also where PHP doesn't run as PHP-FPM and the browser keeps waiting for the button's request.
+
 ## 1.5.1 (2026-10-13)
 
 ### What's fixed

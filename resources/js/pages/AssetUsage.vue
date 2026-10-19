@@ -4,9 +4,7 @@ import {
     Alert,
     Button,
     Card,
-    Description,
     Header,
-    Heading,
     Pagination,
     Panel,
     PanelFooter,
@@ -18,15 +16,20 @@ import AssetRow from '../components/AssetRow.vue'
 import AssetTableHead from '../components/AssetTableHead.vue'
 import CompressAll from '../components/CompressAll.vue'
 import CompressionCard from '../components/CompressionCard.vue'
+import CompressionUnavailable from '../components/CompressionUnavailable.vue'
+import DeletionTotals from '../components/DeletionTotals.vue'
 import DownloadPdf from '../components/DownloadPdf.vue'
 import IndexAlerts from '../components/IndexAlerts.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import MarkedText from '../components/MarkedText.vue'
 import PageTabs from '../components/PageTabs.vue'
+import RunButton from '../components/RunButton.vue'
+import RunFailure from '../components/RunFailure.vue'
 import DeleteConfirmation from '../components/DeleteConfirmation.vue'
 import { readQuery, writeQuery } from '../support/filterQuery.js'
 import { escapeHtml, formatBytes, formatDate, mark, parts } from '../support/formatting.js'
 import polling from '../support/polling.js'
+import runs from '../support/runs.js'
 
 export default {
     components: {
@@ -39,23 +42,25 @@ export default {
         Card,
         CompressAll,
         CompressionCard,
+        CompressionUnavailable,
         DeleteConfirmation,
-        Description,
+        DeletionTotals,
         DownloadPdf,
         Head,
         Header,
-        Heading,
         IndexAlerts,
         ListSkeleton,
         MarkedText,
         PageTabs,
         Pagination,
+        RunButton,
+        RunFailure,
         Panel,
         PanelFooter,
         Text,
     },
 
-    mixins: [polling],
+    mixins: [polling, runs],
 
     props: {
         /** 'usage', or 'compression' for the same overview narrowed down to compressible images. */
@@ -67,6 +72,7 @@ export default {
         canDelete: Boolean,
         assetsUrl: String,
         rebuildUrl: String,
+        stopUrl: String,
         statusUrl: String,
         destroyUrl: String,
         destroyUnusedUrl: String,
@@ -75,6 +81,7 @@ export default {
         compressionEnabled: Boolean,
         canCompress: Boolean,
         analyzeUrl: String,
+        analyzeStopUrl: String,
         compressionStatusUrl: String,
         compressUrl: String,
         compressAllUrl: String,
@@ -107,20 +114,16 @@ export default {
             /** False until the first response lands, so nothing flashes an empty or stale state. */
             ready: false,
             loading: true,
-            rebuilding: false,
             deleting: false,
             selected: [],
             expanded: [],
             confirming: null,
             confirmingAllUnused: false,
             searchTimeout: null,
-            poll: null,
             /** Numbers each load(), so a slow earlier response can't overwrite a newer one. */
             latestLoad: 0,
             /** Where the compression analysis stands; null while compression is off. */
             compression: null,
-            startingAnalysis: false,
-            compressionPoll: null,
             /** A "Compress all" run is going, which holds back the other buttons. */
             compressing: false,
         }
@@ -232,8 +235,15 @@ export default {
             return formatDate(this.index.built_at, { preset: 'datetime', month: 'long' })
         },
 
+        /** The usage check on the overview, an analysis on the Compression page. */
+        showsList() {
+            if (this.view === 'compression') return !!this.compression?.available && !this.compression.never_analyzed
+
+            return !!this.index.built_at
+        },
+
         busy() {
-            return this.loading || this.rebuilding || this.deleting || this.compressing
+            return this.loading || this.deleting || this.compressing || (this.starting === 'index' && !this.index.building)
         },
 
         unusedTotal() {
@@ -284,8 +294,6 @@ export default {
 
     beforeUnmount() {
         clearTimeout(this.searchTimeout)
-        this.stopPolling()
-        this.stopCompressionPolling()
     },
 
     methods: {
@@ -323,8 +331,8 @@ export default {
 
                     this.assets = response.data.data
                     this.meta = response.data.meta
-                    this.setIndex(response.data.meta.index)
-                    this.setCompression(response.data.meta.compression)
+                    this.setRun('index', response.data.meta.index)
+                    this.setRun('compression', response.data.meta.compression)
                     // A reload after a rebuild, an analysis or a compression keeps what is still on the page and selectable.
                     this.selected = this.selected.filter(id => this.selectableAssets.some(asset => asset.id === id))
                 })
@@ -347,94 +355,6 @@ export default {
         goToPage(page) {
             this.page = page
             this.load()
-        },
-
-        rebuild() {
-            this.rebuilding = true
-
-            this.$axios
-                .post(this.rebuildUrl)
-                .then(response => {
-                    this.$toast.success(escapeHtml(response.data.message))
-                    this.setIndex(response.data.index)
-                    this.load()
-                })
-                .catch(error => this.$toast.error(this.errorMessage(error)))
-                .finally(() => (this.rebuilding = false))
-        },
-
-        /**
-         * A queued rebuild finishes outside this request, so keep checking until
-         * the index reports itself done. Under the sync queue it is already
-         * finished by the time the response lands and this never starts.
-         */
-        setIndex(index) {
-            this.index = index
-
-            if (index.building) {
-                this.startPolling()
-            } else {
-                this.stopPolling()
-            }
-        },
-
-        startPolling() {
-            this.startPoll('poll', this.statusUrl, data => {
-                if (!data.index.building) {
-                    this.stopPolling()
-                    this.load()
-                }
-
-                this.index = data.index
-            })
-        },
-
-        stopPolling() {
-            this.stopPoll('poll')
-        },
-
-        analyze() {
-            this.startingAnalysis = true
-
-            this.$axios
-                .post(this.analyzeUrl)
-                .then(response => {
-                    this.$toast.success(__('asset-usage::messages.compress.analyze_started'))
-                    this.setCompression(response.data.compression)
-                    this.load()
-                })
-                .catch(error => this.$toast.error(this.errorMessage(error)))
-                .finally(() => (this.startingAnalysis = false))
-        },
-
-        /** Same idea as setIndex: a queued analysis finishes outside this request. */
-        setCompression(compression) {
-            this.compression = compression
-
-            if (compression?.analyzing) {
-                this.startCompressionPolling()
-            } else {
-                this.stopCompressionPolling()
-            }
-        },
-
-        startCompressionPolling() {
-            this.startPoll('compressionPoll', this.compressionStatusUrl, data => {
-                if (!data.compression.analyzing) {
-                    this.stopCompressionPolling()
-                    this.load()
-                }
-
-                this.compression = data.compression
-            })
-        },
-
-        stopCompressionPolling() {
-            this.stopPoll('compressionPoll')
-        },
-
-        formatBytes(bytes) {
-            return formatBytes(bytes)
         },
 
         confirmDelete(assets) {
@@ -553,11 +473,16 @@ export default {
                     :title="index.built_at_relative"
                     :text="__('asset-usage::messages.index.updated_at', { time: builtAt })"
                 />
-                <Button
-                    variant="primary"
+                <RunButton
+                    :running="index.building"
+                    :stopping="stopping === 'index' || !!index.progress?.stopping"
                     :disabled="busy"
-                    :text="rebuilding || index.building ? __('asset-usage::messages.index.refreshing') : __('asset-usage::messages.index.refresh')"
-                    @click="rebuild"
+                    :text="starting === 'index' ? __('asset-usage::messages.index.refreshing') : __('asset-usage::messages.index.refresh')"
+                    :stop-text="__('asset-usage::messages.index.stop')"
+                    :stop-heading="__('asset-usage::messages.index.stop_heading')"
+                    :stop-confirm="__('asset-usage::messages.index.stop_confirm')"
+                    @start="startRun('index', rebuildUrl)"
+                    @stop="stopRun('index', stopUrl)"
                 />
             </template>
 
@@ -569,12 +494,17 @@ export default {
                     variant="subtle"
                     :text="__('asset-usage::messages.compress.last_analyzed', { time: compressionAnalyzedAt })"
                 />
-                <Button
+                <RunButton
                     v-if="canCompress"
-                    variant="primary"
-                    :disabled="busy || startingAnalysis || compression.analyzing"
-                    :text="compression.analyzing ? __('asset-usage::messages.compress.analyzing') : __('asset-usage::messages.compress.analyze')"
-                    @click="analyze"
+                    :running="compression.analyzing"
+                    :stopping="stopping === 'compression' || !!compression.progress?.stopping"
+                    :disabled="busy || starting === 'compression'"
+                    :text="starting === 'compression' ? __('asset-usage::messages.compress.analyzing') : __('asset-usage::messages.compress.analyze')"
+                    :stop-text="__('asset-usage::messages.compress.analyze_stop')"
+                    :stop-heading="__('asset-usage::messages.compress.analyze_stop_heading')"
+                    :stop-confirm="__('asset-usage::messages.compress.analyze_stop_confirm')"
+                    @start="startRun('compression', analyzeUrl)"
+                    @stop="stopRun('compression', analyzeStopUrl)"
                 />
             </template>
         </Header>
@@ -618,18 +548,10 @@ export default {
                 </div>
             </Alert>
 
-            <Alert v-if="view === 'compression' && compression && !compression.available" class="mb-4" variant="warning">
-                <Heading :text="__('asset-usage::messages.compress.unavailable_heading')" />
-                <Description :text="__('asset-usage::messages.compress.unavailable', { driver: compression.requirements.driver })" />
-                <a
-                    v-if="compression.requirements.driver_install_url"
-                    class="mt-1 inline-block text-sm font-medium underline hover:no-underline"
-                    :href="compression.requirements.driver_install_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    v-text="__('asset-usage::messages.compress.driver_link', { driver: compression.requirements.driver })"
-                />
-            </Alert>
+            <CompressionUnavailable
+                v-if="view === 'compression' && compression && !compression.available"
+                :requirements="compression.requirements"
+            />
 
             <template v-else-if="view === 'compression' && compression">
                 <Alert
@@ -640,144 +562,142 @@ export default {
                     :text="__('asset-usage::messages.compress.settings_changed')"
                 />
 
+                <RunFailure
+                    v-if="compression.failure"
+                    :failure="compression.failure"
+                    :heading="__('asset-usage::messages.compress.analyze_failed')"
+                    command="php please asset-usage:analyze"
+                />
+
                 <CompressionCard class="mb-4" :compression="compression" :headline="compressionHeadline" :log-url="logUrl" />
             </template>
 
-            <AssetFilters
-                v-model:search="filters.search"
-                v-model:usage="filters.usage"
-                v-model:compression="filters.compression"
-                v-model:container="filters.container"
-                v-model:site="filters.site"
-                :view="view"
-                :containers="containers"
-                :sites="sites"
-                :multisite="multisite"
-            />
-
-            <!-- What was deleted so far, with the way to the log that lists it. -->
-            <!-- The same bar as the compression totals on the Compression page. -->
-            <div
-                v-if="view === 'usage' && meta?.deletions?.count"
-                class="mb-4 flex flex-col gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/60"
-            >
-                <p class="text-gray-700 tabular-nums dark:text-gray-300">
-                    {{ __n('asset-usage::messages.log.deleted_count', meta.deletions.count, { count: meta.deletions.count }) }}
-                    <span aria-hidden="true"> · </span>
-                    <strong class="font-semibold" v-text="__('asset-usage::messages.log.freed', { size: formatBytes(meta.deletions.bytes) })" />
-                </p>
-                <Button v-if="logUrl" class="shrink-0" size="sm" :href="logUrl" :text="__('asset-usage::messages.log.view')" />
-            </div>
-
-            <!-- Also for users who may not delete, who still get the PDF. -->
-            <div v-if="view === 'usage'" class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-                    <Button
-                        v-if="deletes"
-                        variant="danger"
-                        :disabled="busy || !selected.length"
-                        :text="deleteSelectedText"
-                        @click="confirmDelete(selectedAssets)"
-                    />
-
-                    <DownloadPdf v-bind="downloadProps" />
-                </div>
-
-                <Button
-                    v-if="deletes && unusedTotal"
-                    :disabled="busy"
-                    :text="`${__('asset-usage::messages.delete.all_unused')} (${unusedTotal})`"
-                    @click="confirmDeleteAllUnused"
+            <!-- Before the first check or analysis there is nothing to list yet, only the notice and the button above. -->
+            <template v-if="showsList">
+                <AssetFilters
+                    v-model:search="filters.search"
+                    v-model:usage="filters.usage"
+                    v-model:compression="filters.compression"
+                    v-model:container="filters.container"
+                    v-model:site="filters.site"
+                    :view="view"
+                    :containers="containers"
+                    :sites="sites"
+                    :multisite="multisite"
                 />
-            </div>
 
-            <CompressAll
-                v-if="compresses"
-                :summary="meta?.compress_all"
-                :selected="selectedAssets"
-                :params="requestParams"
-                :all-url="compressAllUrl"
-                :batch-url="compressBatchUrl"
-                :keep-originals-days="keepOriginalsDays"
-                :disabled="busy || compression?.analyzing"
-                @start="compressing = true"
-                @finish="compressing = false; load()"
-            >
-                <DownloadPdf v-bind="downloadProps" />
-            </CompressAll>
+                <DeletionTotals v-if="view === 'usage' && meta?.deletions?.count" :deletions="meta.deletions" :log-url="logUrl" />
 
-            <Text
-                v-if="!assets.length"
-                as="p"
-                class="italic"
-                size="sm"
-                variant="subtle"
-                :text="view !== 'compression'
-                    ? __('asset-usage::messages.no_results')
-                    : __(filters.compression === 'compressed' ? 'asset-usage::messages.compress.none_compressed' : 'asset-usage::messages.compress.none_compressible')"
-            />
-
-            <Panel v-else>
-                <!-- Relative too, so absolutely positioned content such as the sr-only heading is clipped here as well. -->
-                <Card
-                    inset
-                    class="relative overflow-x-auto overscroll-x-contain"
-                    :class="{ 'pointer-events-none opacity-60': busy }"
-                    :aria-disabled="busy"
-                >
-                    <table class="w-full text-sm">
-                        <AssetTableHead
-                            :columns="columns"
-                            :sort-column="sortColumn"
-                            :sort-direction="sortDirection"
-                            :selects="selects"
-                            :selectable="selectableAssets.length > 0"
-                            :all-selected="allSelected"
-                            :some-selected="someSelected"
-                            :compresses="compresses"
-                            :deletes="deletes"
-                            @sort="sortBy"
-                            @toggle-all="toggleAll"
+                <!-- Also for users who may not delete, who still get the PDF. -->
+                <div v-if="view === 'usage'" class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+                        <Button
+                            v-if="deletes"
+                            variant="danger"
+                            :disabled="busy || !selected.length"
+                            :text="deleteSelectedText"
+                            @click="confirmDelete(selectedAssets)"
                         />
 
-                        <tbody>
-                            <AssetRow
-                                v-for="asset in assets"
-                                :key="asset.id"
-                                :asset="asset"
-                                :selects="selects"
-                                :selectable="isSelectable(asset)"
-                                :selected="isSelected(asset.id)"
-                                :expanded="isExpanded(asset.id)"
-                                :deletes="deletes"
-                                :shows-savings="showsSavings"
-                                :can-compress="canCompress"
-                                :compress-url="compressUrl"
-                                :threshold="compression?.threshold"
-                                :index-stale="index.stale"
-                                :shows-container="containers.length > 1"
-                                :column-count="columns.length"
-                                :site-titles="siteTitles"
-                                :multisite="multisite"
-                                @toggle-select="toggleSelected(asset.id)"
-                                @toggle-expand="toggleExpanded(asset.id)"
-                                @delete="confirmDelete([asset])"
-                            />
-                        </tbody>
-                    </table>
-                </Card>
+                        <DownloadPdf v-bind="downloadProps" />
+                    </div>
 
-                <PanelFooter v-if="meta && meta.last_page > 1">
-                    <Pagination
-                        :class="{ 'pointer-events-none opacity-60': busy }"
-                        :resource-meta="meta"
-                        show-totals
-                        show-page-links
-                        :show-per-page-selector="false"
-                        @page-selected="goToPage"
+                    <Button
+                        v-if="deletes && unusedTotal"
+                        :disabled="busy"
+                        :text="`${__('asset-usage::messages.delete.all_unused')} (${unusedTotal})`"
+                        @click="confirmDeleteAllUnused"
                     />
-                </PanelFooter>
-            </Panel>
+                </div>
+
+                <CompressAll
+                    v-if="compresses"
+                    :summary="meta?.compress_all"
+                    :selected="selectedAssets"
+                    :params="requestParams"
+                    :all-url="compressAllUrl"
+                    :batch-url="compressBatchUrl"
+                    :keep-originals-days="keepOriginalsDays"
+                    :disabled="busy || compression?.analyzing"
+                    @start="compressing = true"
+                    @finish="compressing = false; load()"
+                >
+                    <DownloadPdf v-bind="downloadProps" />
+                </CompressAll>
+
+                <Text
+                    v-if="!assets.length"
+                    as="p"
+                    class="italic"
+                    size="sm"
+                    variant="subtle"
+                    :text="view !== 'compression'
+                        ? __('asset-usage::messages.no_results')
+                        : __(filters.compression === 'compressed' ? 'asset-usage::messages.compress.none_compressed' : 'asset-usage::messages.compress.none_compressible')"
+                />
+
+                <Panel v-else>
+                    <!-- Relative too, so absolutely positioned content such as the sr-only heading is clipped here as well. -->
+                    <Card
+                        inset
+                        class="relative overflow-x-auto overscroll-x-contain"
+                        :class="{ 'pointer-events-none opacity-60': busy }"
+                        :aria-disabled="busy"
+                    >
+                        <table class="w-full text-sm">
+                            <AssetTableHead
+                                :columns="columns"
+                                :sort-column="sortColumn"
+                                :sort-direction="sortDirection"
+                                :selects="selects"
+                                :selectable="selectableAssets.length > 0"
+                                :all-selected="allSelected"
+                                :some-selected="someSelected"
+                                :compresses="compresses"
+                                :deletes="deletes"
+                                @sort="sortBy"
+                                @toggle-all="toggleAll"
+                            />
+
+                            <tbody>
+                                <AssetRow
+                                    v-for="asset in assets"
+                                    :key="asset.id"
+                                    :asset="asset"
+                                    :selects="selects"
+                                    :selectable="isSelectable(asset)"
+                                    :selected="isSelected(asset.id)"
+                                    :expanded="isExpanded(asset.id)"
+                                    :deletes="deletes"
+                                    :shows-savings="showsSavings"
+                                    :can-compress="canCompress"
+                                    :compress-url="compressUrl"
+                                    :threshold="compression?.threshold"
+                                    :index-stale="index.stale"
+                                    :shows-container="containers.length > 1"
+                                    :column-count="columns.length"
+                                    :site-titles="siteTitles"
+                                    :multisite="multisite"
+                                    @toggle-select="toggleSelected(asset.id)"
+                                    @toggle-expand="toggleExpanded(asset.id)"
+                                    @delete="confirmDelete([asset])"
+                                />
+                            </tbody>
+                        </table>
+                    </Card>
+
+                    <PanelFooter v-if="meta && meta.last_page > 1">
+                        <Pagination
+                            :class="{ 'pointer-events-none opacity-60': busy }"
+                            :resource-meta="meta"
+                            show-totals
+                            show-page-links
+                            :show-per-page-selector="false"
+                            @page-selected="goToPage"
+                        />
+                    </PanelFooter>
+                </Panel>
+            </template>
 
             <AboutFooter />
         </template>

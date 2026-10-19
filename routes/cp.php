@@ -19,6 +19,7 @@ Route::prefix('asset-usage')->name('asset-usage.')->group(function () {
 
     Route::get('assets', [AssetUsageController::class, 'assets'])->name('assets');
     Route::post('rebuild', [AssetUsageController::class, 'rebuild'])->name('rebuild');
+    Route::post('stop', [AssetUsageController::class, 'stop'])->name('stop');
     Route::get('status', [AssetUsageController::class, 'status'])->name('status');
     Route::get('summary', [AssetUsageController::class, 'summary'])->name('summary');
     Route::delete('assets', [AssetUsageController::class, 'destroy'])->name('destroy');
@@ -39,6 +40,7 @@ Route::prefix('asset-usage')->name('asset-usage.')->group(function () {
         Route::get('all', [AssetUsageController::class, 'compressible'])->name('all');
         Route::post('batch', [CompressionController::class, 'batch'])->name('batch');
         Route::post('analyze', [CompressionController::class, 'analyze'])->name('analyze');
+        Route::post('analyze/stop', [CompressionController::class, 'stop'])->name('analyze.stop');
         Route::get('status', [CompressionController::class, 'status'])->name('status');
     });
 });

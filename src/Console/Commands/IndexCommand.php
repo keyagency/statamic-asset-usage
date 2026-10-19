@@ -6,7 +6,6 @@ use Illuminate\Console\Command;
 use KeyAgency\AssetUsage\Console\Commands\Concerns\BuildsIndexWithProgress;
 use KeyAgency\AssetUsage\Jobs\BuildIndex;
 use KeyAgency\AssetUsage\Usage\Containers;
-use KeyAgency\AssetUsage\Usage\IndexStore;
 use Statamic\Console\RunsInPlease;
 
 class IndexCommand extends Command
@@ -29,10 +28,7 @@ class IndexCommand extends Command
         }
 
         if ($this->option('queue')) {
-            // Same reason as the CP: the CP should say a rebuild is running before a worker gets to it.
-            (new IndexStore)->markBuilding();
-
-            BuildIndex::dispatch();
+            BuildIndex::start();
 
             $this->components->info('Rebuild dispatched to the queue.');
 
@@ -45,6 +41,12 @@ class IndexCommand extends Command
         ));
 
         [$index, $scanned] = $this->buildIndexWithProgress();
+
+        if ($index === null) {
+            $this->components->warn('The rebuild was stopped from the Control Panel or replaced by a newer one.');
+
+            return self::FAILURE;
+        }
 
         $used = count($index->usedAssetIds());
         $total = count(Containers::make()->assetIds());

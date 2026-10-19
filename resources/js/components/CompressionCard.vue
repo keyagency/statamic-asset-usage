@@ -1,14 +1,16 @@
 <script>
 import { Button, Card, Heading, Icon } from '@statamic/cms/ui'
+import { formatNumber } from '../support/formatting.js'
 import CompressionTotals from './CompressionTotals.vue'
 import MarkedText from './MarkedText.vue'
+import RunProgress from './RunProgress.vue'
 
 /**
  * The top of the Compression page: what the analysis found, what the addon
  * saved so far, when the numbers are made, and what this server lacks.
  */
 export default {
-    components: { Button, Card, CompressionTotals, Heading, Icon, MarkedText },
+    components: { Button, Card, CompressionTotals, Heading, Icon, MarkedText, RunProgress },
 
     props: {
         compression: Object,
@@ -18,6 +20,18 @@ export default {
     },
 
     computed: {
+        /** Known once the images are listed, a moment after the run starts. */
+        progress() {
+            return this.compression.analyzing && this.compression.progress?.total ? this.compression.progress : null
+        },
+
+        progressText() {
+            return __('asset-usage::messages.compress.analyze_progress', {
+                done: formatNumber(this.progress.done),
+                total: formatNumber(this.progress.total),
+            })
+        },
+
         description() {
             if (this.compression.analyzing) return __('asset-usage::messages.compress.analyzing_notice')
             if (this.compression.never_analyzed) return __('asset-usage::messages.compress.never_analyzed')
@@ -91,6 +105,8 @@ export default {
                 <p v-if="description" class="mt-0.5 text-sm text-gray-600 dark:text-gray-400" v-text="description" />
             </div>
         </div>
+
+        <RunProgress v-if="progress" class="ps-13" :progress="progress" :text="progressText" />
 
         <!-- What the addon already saved. -->
         <div

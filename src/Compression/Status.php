@@ -6,6 +6,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use KeyAgency\AssetUsage\Jobs\AnalyzeAllCompression;
 use KeyAgency\AssetUsage\Log\AssetLog;
+use KeyAgency\AssetUsage\Support\Run;
 use KeyAgency\AssetUsage\Support\Settings;
 use KeyAgency\AssetUsage\Usage\Containers;
 use Statamic\Facades\User;
@@ -33,6 +34,8 @@ class Status
             'available' => false,
             'requirements' => self::requirements(),
             'analyzing' => false,
+            'progress' => null,
+            'failure' => null,
             'analyzed_at' => null,
             'never_analyzed' => false,
             'settings_changed' => false,
@@ -97,11 +100,16 @@ class Status
             fn (array $record) => ($record['status'] ?? null) === CompressionResult::OK && ($record['savings'] ?? 0) >= $threshold
         );
 
+        $analyzing = $this->store->isAnalyzing();
+
         return [
             'enabled' => Settings::compressionEnabled(),
             'available' => true,
             'requirements' => self::requirements(),
-            'analyzing' => $this->store->isAnalyzing(),
+            'analyzing' => $analyzing,
+            'progress' => $analyzing ? Run::analysis()->progress() : null,
+            /** Why the last analysis didn't finish, unless one is running or finished since. */
+            'failure' => $analyzing ? null : Run::analysis()->failure($meta['state'] === AnalysisStore::STATE_ANALYZING),
             'analyzed_at' => $meta['analyzed_at'],
             'never_analyzed' => $meta['analyzed_at'] === null && $records === [],
             'settings_changed' => $this->store->settingsChanged($this->fingerprint),
