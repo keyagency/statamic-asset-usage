@@ -277,6 +277,7 @@ return [
         'download' => 'Descargar la vista actual (PDF)',
         'creating' => 'Creando PDF…',
         'creating_thumbnails' => 'Creando PDF… :done / :count',
+        'creating_part' => 'Creando PDF… parte :number de :total',
         'failed' => 'No se pudo crear el PDF.',
         'unusable_index' => 'Los datos de uso no están actualizados. Actualízalos primero, para que el PDF no muestre como no usados assets que sí se usan.',
         'created' => 'Creado',
@@ -293,7 +294,7 @@ return [
         'open_overview' => 'Abrir este resumen en el Control Panel',
         'truncated_heading' => 'Este PDF está limitado a :limit assets',
         'truncated' => 'Contiene los primeros :limit de los :total assets encontrados. Acota la lista con los filtros para obtener el resto en un PDF.',
-        'page' => 'Página :page de :pages',
+        'page' => 'Página :number de :total',
     ],
 
     'widget' => [

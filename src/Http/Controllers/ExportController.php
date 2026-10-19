@@ -32,8 +32,14 @@ class ExportController extends CpController
 {
     use AuthorizesAssetUsage, ListsAssets;
 
-    /** The most rows one PDF lists. dompdf gets slow and memory-hungry on longer tables. */
-    public const MAX_ROWS = 1000;
+    /** The most rows one PDF lists, in parts of PART_ROWS. Read through static:: so a test can lower them. */
+    public const MAX_ROWS = 10000;
+
+    /**
+     * Rows per part. dompdf takes far more time and memory per row on a long
+     * document, so the page asks for the PDF a part at a time and joins them.
+     */
+    public const PART_ROWS = 500;
 
     /** Thumbnails per request. Each one decodes an original, which can take a moment on a large file. */
     public const THUMBNAIL_BATCH = 5;
@@ -57,13 +63,14 @@ class ExportController extends CpController
         }
 
         $thumbnails = new Thumbnails;
-        $ids = array_slice($this->listedIds($request, $unused->containers(), $index), 0, self::MAX_ROWS);
+        $ids = array_slice($this->listedIds($request, $unused->containers(), $index), 0, static::MAX_ROWS);
         $assets = $this->assetValues($ids, fn ($asset) => $asset);
 
         return [
             'ids' => array_values(array_filter($ids, fn (string $id) => isset($assets[$id])
                 && Thumbnails::applies($assets[$id])
                 && ! $thumbnails->has($assets[$id]))),
+            'parts' => max(1, (int) ceil(count($ids) / static::PART_ROWS)),
         ];
     }
 
@@ -100,13 +107,16 @@ class ExportController extends CpController
         return ['made' => $made];
     }
 
+    /** One part of the PDF; the page joins them. Only the first has the header. */
     public function download(Request $request)
     {
         [$view, $unused, $index] = $this->prepare($request);
 
+        $part = (int) ($request->validate(['part' => ['nullable', 'integer', 'min:0', 'max:'.intdiv(static::MAX_ROWS - 1, static::PART_ROWS)]])['part'] ?? 0);
+
         $this->raiseLimits();
 
-        $report = $this->report($request, $view, $unused, $index, $this->timezone($request));
+        $report = $this->report($request, $view, $unused, $index, $this->timezone($request), $part);
 
         return response(app(Pdf::class)->render($report), 200, [
             'Content-Type' => 'application/pdf',
@@ -157,11 +167,15 @@ class ExportController extends CpController
         return [$view, $unused, $unused->index()];
     }
 
-    private function report(Request $request, string $view, Unused $unused, UsageIndex $index, string $timezone): Report
+    private function report(Request $request, string $view, Unused $unused, UsageIndex $index, string $timezone, int $part = 0): Report
     {
-        $ids = $this->listedIds($request, $unused->containers(), $index);
-        $assets = $this->assetValues($ids, fn ($asset) => $asset);
-        $ids = array_values(array_filter($ids, fn (string $id) => isset($assets[$id])));
+        $listed = $this->listedIds($request, $unused->containers(), $index);
+        $partIds = array_slice(array_slice($listed, 0, static::MAX_ROWS), $part * static::PART_ROWS, static::PART_ROWS);
+
+        // Only the first part has the header, which counts everything that matches; the others need their own rows only.
+        $assets = $this->assetValues($part === 0 ? $listed : $partIds, fn ($asset) => $asset);
+        $total = $part === 0 ? count($assets) : count($listed);
+        $partIds = array_values(array_filter($partIds, fn (string $id) => isset($assets[$id])));
 
         $thumbnails = new Thumbnails;
         $showsSavings = Settings::compressionEnabled() && Requirements::available();
@@ -169,7 +183,7 @@ class ExportController extends CpController
 
         $rows = array_map(
             fn (string $id) => $this->row($assets[$id], $index, $unused->hasUsageData(), $thumbnails, $showsSavings, $timezone),
-            array_slice($ids, 0, self::MAX_ROWS)
+            $partIds
         );
 
         return new Report(
@@ -178,8 +192,8 @@ class ExportController extends CpController
             createdAt: $now->isoFormat('LLL'),
             filters: $this->activeFilters($request, $view),
             sort: $this->sortText($request),
-            total: count($ids),
-            totalSize: Str::fileSizeForHumans(array_sum(array_map(fn ($asset) => (int) $asset->size(), $assets)), 1),
+            total: $total,
+            totalSize: $part === 0 ? Str::fileSizeForHumans(array_sum(array_map(fn ($asset) => (int) $asset->size(), $assets)), 1) : '',
             rows: $rows,
             showsContainer: $unused->containers()->all()->filter(fn ($container) => $this->userCanView($container))->count() > 1,
             showsSavings: $showsSavings,
@@ -187,6 +201,8 @@ class ExportController extends CpController
             overviewUrl: $this->overviewUrl($request, $view),
             // The time without colons, which Windows doesn't allow in a file name.
             filename: 'asset-usage-'.($view === 'compression' ? 'compression' : 'overview').'-'.$now->format('Y-m-d-His').'.pdf',
+            listed: min($total, static::MAX_ROWS),
+            continued: $part > 0,
         );
     }
 

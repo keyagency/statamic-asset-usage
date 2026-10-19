@@ -5,7 +5,8 @@
         "build": "vite build"
     },
     "dependencies": {
-        "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package"
+        "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package",
+        "pdf-lib": "1.17.1"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0",

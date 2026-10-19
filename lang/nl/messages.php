@@ -277,6 +277,7 @@ return [
         'download' => 'Huidig overzicht downloaden (PDF)',
         'creating' => 'PDF aanmaken…',
         'creating_thumbnails' => 'PDF aanmaken… :done / :count',
+        'creating_part' => 'PDF aanmaken… deel :number van :total',
         'failed' => 'De PDF kon niet worden aangemaakt.',
         'unusable_index' => 'De gebruiksgegevens zijn niet actueel. Controleer het gebruik eerst opnieuw, zodat de PDF geen gebruikte assets als ongebruikt toont.',
         'created' => 'Aangemaakt',
@@ -293,7 +294,7 @@ return [
         'open_overview' => 'Dit overzicht openen in het Control Panel',
         'truncated_heading' => 'Deze PDF is beperkt tot :limit assets',
         'truncated' => 'De eerste :limit van de :total gevonden assets staan erin. Verfijn de lijst met de filters om de rest in een PDF te krijgen.',
-        'page' => 'Pagina :page van :pages',
+        'page' => 'Pagina :number van :total',
     ],
 
     'widget' => [

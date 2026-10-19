@@ -1,6 +1,7 @@
 <script>
 import { Button } from '@statamic/cms/ui'
 import { escapeHtml } from '../support/formatting.js'
+import { joinPdf } from '../support/joinPdf.js'
 
 /** Thumbnails per request, the most ExportController::makeThumbnails() takes. */
 const BATCH_SIZE = 5
@@ -9,7 +10,9 @@ const BATCH_SIZE = 5
  * The list as a PDF, with the page's current filters and order. The images
  * without a thumbnail are sent a few at a time first, the way "Compress all"
  * sends its images, so no request has to decode hundreds of originals. The
- * button counts them meanwhile, then waits for the PDF and saves it.
+ * PDF itself comes in parts of a few hundred rows, which the page joins into
+ * one file, since dompdf slows down sharply on a long one. The button counts
+ * both meanwhile.
  *
  * Fetched rather than linked to: Statamic's Button turns an href into an
  * Inertia link, which can't take a file.
@@ -41,6 +44,10 @@ export default {
                 return __('asset-usage::messages.export.creating_thumbnails', { done: this.run.done, count: this.run.total })
             }
 
+            if (this.run.parts > 1) {
+                return __('asset-usage::messages.export.creating_part', { number: this.run.part, total: this.run.parts })
+            }
+
             return __('asset-usage::messages.export.creating')
         },
     },
@@ -54,7 +61,7 @@ export default {
         async download() {
             if (this.run) return
 
-            this.run = { done: 0, total: 0, stopping: false }
+            this.run = { done: 0, total: 0, part: 0, parts: 0, stopping: false }
 
             // Taken back from this.run, which is the reactive version, so the button follows the counts.
             const run = this.run
@@ -63,7 +70,7 @@ export default {
             const params = { ...this.params, page: undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
 
             try {
-                const ids = (await this.$axios.get(this.thumbnailsUrl, { params })).data.ids
+                const { ids, parts } = (await this.$axios.get(this.thumbnailsUrl, { params })).data
 
                 run.total = ids.length
 
@@ -76,11 +83,24 @@ export default {
                 }
 
                 run.total = 0
+                run.parts = parts
+
+                const buffers = []
+                let filename = null
+
+                for (let part = 0; part < parts && !run.stopping; part++) {
+                    run.part = part + 1
+
+                    const response = await this.$axios.get(this.url, { params: { ...params, part }, responseType: 'arraybuffer' })
+
+                    filename ??= this.filename(response)
+                    buffers.push(response.data)
+                }
 
                 if (!run.stopping) {
-                    const response = await this.$axios.get(this.url, { params, responseType: 'blob' })
+                    const bytes = await joinPdf(buffers, (number, total) => __('asset-usage::messages.export.page', { number, total }))
 
-                    if (!run.stopping) this.save(response)
+                    if (!run.stopping) this.save(new Blob([bytes], { type: 'application/pdf' }), filename)
                 }
             } catch (error) {
                 if (!run.stopping) this.$toast.error(escapeHtml(await this.errorMessage(error)))
@@ -89,10 +109,15 @@ export default {
             this.run = null
         },
 
-        save(response) {
+        /** The name the server gives the first part, with the time it was made. */
+        filename(response) {
             const disposition = response.headers['content-disposition'] ?? ''
-            const filename = disposition.match(/filename="?([^";]+)"?/)?.[1] ?? 'asset-usage.pdf'
-            const url = URL.createObjectURL(response.data)
+
+            return disposition.match(/filename="?([^";]+)"?/)?.[1] ?? 'asset-usage.pdf'
+        },
+
+        save(blob, filename) {
+            const url = URL.createObjectURL(blob)
             const link = Object.assign(document.createElement('a'), { href: url, download: filename })
 
             document.body.appendChild(link)
@@ -103,13 +128,13 @@ export default {
             setTimeout(() => URL.revokeObjectURL(url), 1000)
         },
 
-        /** A refusal on the PDF itself arrives as a blob, since that is what was asked for. */
+        /** A refusal on the PDF itself arrives as bytes, since that is what was asked for. */
         async errorMessage(error) {
             let data = error.response?.data
 
-            if (data instanceof Blob) {
+            if (data instanceof ArrayBuffer) {
                 try {
-                    data = JSON.parse(await data.text())
+                    data = JSON.parse(new TextDecoder().decode(data))
                 } catch {
                     data = null
                 }

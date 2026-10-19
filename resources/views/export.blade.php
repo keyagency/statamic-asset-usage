@@ -38,61 +38,66 @@
     </style>
 </head>
 <body>
-    <table class="header">
-        <tr>
-            <td>
-                <h1>{{ $report->title }}</h1>
-                <p class="subtitle">{{ $report->subtitle }}</p>
-            </td>
-            <td class="maker">
-                {{ __('asset-usage::messages.made_by') }} <strong>Key Agency</strong><br>
-                <a href="https://keyagency.nl">keyagency.nl</a> &nbsp;·&nbsp; <a href="mailto:hello@keyagency.nl">hello@keyagency.nl</a><br>
-                <a href="https://statamic.com/addons/key-agency/asset-usage">Statamic Marketplace</a>
-            </td>
-            @isset ($logo)
-                <td class="logo"><a href="https://keyagency.nl"><img src="{{ $logo }}" alt="Key Agency"></a></td>
-            @endisset
-        </tr>
-    </table>
+    {{-- The PDF is made in parts that the page joins; a later part goes on with the table. --}}
+    @unless ($report->continued)
+        <table class="header">
+            <tr>
+                <td>
+                    <h1>{{ $report->title }}</h1>
+                    <p class="subtitle">{{ $report->subtitle }}</p>
+                </td>
+                <td class="maker">
+                    {{ __('asset-usage::messages.made_by') }} <strong>Key Agency</strong><br>
+                    <a href="https://keyagency.nl">keyagency.nl</a> &nbsp;·&nbsp; <a href="mailto:hello@keyagency.nl">hello@keyagency.nl</a><br>
+                    <a href="https://statamic.com/addons/key-agency/asset-usage">Statamic Marketplace</a>
+                </td>
+                @isset ($logo)
+                    <td class="logo"><a href="https://keyagency.nl"><img src="{{ $logo }}" alt="Key Agency"></a></td>
+                @endisset
+            </tr>
+        </table>
 
-    <table class="meta">
-        <tr>
-            <td class="label">{{ __('asset-usage::messages.export.created') }}</td>
-            <td>{{ $report->createdAt }}</td>
-        </tr>
-        <tr>
-            <td class="label">{{ __('asset-usage::messages.export.filters') }}</td>
-            <td>
-                @forelse ($report->filters as $filter)
-                    {{ $filter['label'] }}: <strong>{{ $filter['value'] }}</strong>@if (! $loop->last) &nbsp;·&nbsp; @endif
-                @empty
-                    {{ __('asset-usage::messages.export.no_filters') }}
-                @endforelse
-            </td>
-        </tr>
-        <tr>
-            <td class="label">{{ __('asset-usage::messages.export.sorted_by') }}</td>
-            <td>{{ $report->sort }}</td>
-        </tr>
-        <tr>
-            <td class="label">{{ __('asset-usage::messages.export.assets') }}</td>
-            <td>{{ trans_choice('asset-usage::messages.export.count', $report->total, ['count' => $report->total]) }} &nbsp;·&nbsp; {{ $report->totalSize }}</td>
-        </tr>
-        <tr>
-            <td class="label">{{ __('asset-usage::messages.export.link') }}</td>
-            <td><a href="{{ $report->overviewUrl }}">{{ __('asset-usage::messages.export.open_overview') }}</a></td>
-        </tr>
-    </table>
+        <table class="meta">
+            <tr>
+                <td class="label">{{ __('asset-usage::messages.export.created') }}</td>
+                <td>{{ $report->createdAt }}</td>
+            </tr>
+            <tr>
+                <td class="label">{{ __('asset-usage::messages.export.filters') }}</td>
+                <td>
+                    @forelse ($report->filters as $filter)
+                        {{ $filter['label'] }}: <strong>{{ $filter['value'] }}</strong>@if (! $loop->last) &nbsp;·&nbsp; @endif
+                    @empty
+                        {{ __('asset-usage::messages.export.no_filters') }}
+                    @endforelse
+                </td>
+            </tr>
+            <tr>
+                <td class="label">{{ __('asset-usage::messages.export.sorted_by') }}</td>
+                <td>{{ $report->sort }}</td>
+            </tr>
+            <tr>
+                <td class="label">{{ __('asset-usage::messages.export.assets') }}</td>
+                <td>{{ trans_choice('asset-usage::messages.export.count', $report->total, ['count' => $report->total]) }} &nbsp;·&nbsp; {{ $report->totalSize }}</td>
+            </tr>
+            <tr>
+                <td class="label">{{ __('asset-usage::messages.export.link') }}</td>
+                <td><a href="{{ $report->overviewUrl }}">{{ __('asset-usage::messages.export.open_overview') }}</a></td>
+            </tr>
+        </table>
 
-    @if ($report->truncated())
-        <div class="notice">
-            <strong>{{ __('asset-usage::messages.export.truncated_heading', ['limit' => count($report->rows)]) }}</strong><br>
-            {{ __('asset-usage::messages.export.truncated', ['limit' => count($report->rows), 'total' => $report->total]) }}
-        </div>
-    @endif
+        @if ($report->truncated())
+            <div class="notice">
+                <strong>{{ __('asset-usage::messages.export.truncated_heading', ['limit' => $report->listed]) }}</strong><br>
+                {{ __('asset-usage::messages.export.truncated', ['limit' => $report->listed, 'total' => $report->total]) }}
+            </div>
+        @endif
+    @endunless
 
     @if (! $report->rows)
-        <p class="empty">{{ $report->emptyText }}</p>
+        @unless ($report->continued)
+            <p class="empty">{{ $report->emptyText }}</p>
+        @endunless
     @else
         {{--
             In tables of fifty rows: dompdf lays a table out as a whole, which

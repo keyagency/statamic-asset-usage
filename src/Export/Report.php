@@ -23,11 +23,15 @@ final class Report
         public readonly string $emptyText,
         public readonly string $overviewUrl,
         public readonly string $filename,
+        /** How many rows the whole PDF lists, over all its parts. */
+        public readonly int $listed = 0,
+        /** A later part of the PDF, which goes on with the table and has no header. */
+        public readonly bool $continued = false,
     ) {}
 
     /** More assets match than the PDF lists. */
     public function truncated(): bool
     {
-        return $this->total > count($this->rows);
+        return $this->total > $this->listed;
     }
 }

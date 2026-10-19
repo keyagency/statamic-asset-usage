@@ -21,9 +21,9 @@ use Throwable;
 class Thumbnails
 {
     /** Twice the size the PDF shows them at, so they stay sharp when zoomed in or printed. */
-    public const SIZE = 96;
+    public const SIZE = 72;
 
-    private const QUALITY = 70;
+    private const QUALITY = 50;
 
     /** Enough of a file for its dimensions; the header sits at the very start. */
     private const HEADER_BYTES = 262144;
@@ -37,7 +37,8 @@ class Thumbnails
 
     public function path(Asset $asset): string
     {
-        return $this->directory().'/'.md5($asset->id()).'-'.Analyzer::version($asset).'.jpg';
+        // The size and quality are in the name, so a change to either makes new ones.
+        return $this->directory().'/'.md5($asset->id()).'-'.Analyzer::version($asset).'-'.self::SIZE.'q'.self::QUALITY.'.jpg';
     }
 
     /** An SVG, a PDF or a video gets its extension in the PDF instead. */

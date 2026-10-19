@@ -1,5 +1,6 @@
 <script>
-import { Input, Select } from '@statamic/cms/ui'
+import { Input } from '@statamic/cms/ui'
+import FitSelect from './FitSelect.vue'
 
 /**
  * Stands in for "any site" in the filter. An option can't carry an empty
@@ -10,7 +11,7 @@ export const ANY_SITE = '*'
 
 /** The search field and the filters above the list, each with a v-model of its own. */
 export default {
-    components: { Input, Select },
+    components: { FitSelect, Input },
 
     props: {
         /** 'usage' or 'compression', which decides the filters on offer. */
@@ -67,31 +68,28 @@ export default {
             @update:model-value="$emit('update:search', $event)"
         />
 
-        <Select
+        <FitSelect
             v-if="view === 'compression'"
             :model-value="compression"
-            class="w-full sm:w-auto! sm:min-w-44 sm:shrink-0"
             :options="compressionOptions"
             option-label="label"
             option-value="value"
             @update:model-value="$emit('update:compression', $event)"
         />
 
-        <Select
+        <FitSelect
             v-if="view === 'usage'"
             :model-value="usage"
-            class="w-full sm:w-auto! sm:min-w-44 sm:shrink-0"
             :options="usageOptions"
             option-label="label"
             option-value="value"
             @update:model-value="$emit('update:usage', $event)"
         />
 
-        <Select
+        <FitSelect
             v-if="containers.length > 1"
             :model-value="container"
             clearable
-            class="w-full sm:w-auto! sm:min-w-56 sm:shrink-0"
             :options="containerOptions"
             option-label="label"
             option-value="value"
@@ -99,10 +97,9 @@ export default {
             @update:model-value="$emit('update:container', $event)"
         />
 
-        <Select
+        <FitSelect
             v-if="multisite && view === 'usage'"
             :model-value="site"
-            class="w-full sm:w-auto! sm:min-w-56 sm:shrink-0"
             :options="siteOptions"
             option-label="label"
             option-value="value"

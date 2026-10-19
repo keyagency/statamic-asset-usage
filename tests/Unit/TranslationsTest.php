@@ -38,6 +38,25 @@ class TranslationsTest extends TestCase
         }
     }
 
+    /**
+     * The CP's __() replaces placeholders in the order given, so :page would
+     * also be replaced inside :pages ("Page 1 of 1s"). Laravel's own translator
+     * sorts them, which is why this only showed in the browser.
+     */
+    #[Test]
+    public function no_placeholder_is_the_start_of_another_in_the_same_text()
+    {
+        foreach ($this->messages('en') as $key => $text) {
+            $placeholders = $this->placeholders($text);
+
+            foreach ($placeholders as $a) {
+                foreach ($placeholders as $b) {
+                    $this->assertFalse($a !== $b && str_starts_with($b, $a), "{$key}: {$a} is the start of {$b}");
+                }
+            }
+        }
+    }
+
     private function messages(string $locale): array
     {
         return Arr::dot(require __DIR__."/../../lang/{$locale}/messages.php");

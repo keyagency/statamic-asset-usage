@@ -177,25 +177,92 @@ class PdfExportTest extends TestCase
         $this->assertSame([], $report->rows);
     }
 
-    #[Test]
-    public function it_lists_at_most_the_limit()
+    /** Limits small enough to test with: three rows in parts of two. */
+    private function smallLimits(): void
     {
+        $this->app->bind(ExportController::class, fn ($app) => new class($app['request']) extends ExportController
+        {
+            public const MAX_ROWS = 3;
+
+            public const PART_ROWS = 2;
+        });
+    }
+
+    #[Test]
+    public function it_lists_at_most_the_limit_in_parts()
+    {
+        $this->smallLimits();
         $this->makeContainer('assets');
         $jpeg = Images::jpeg(8, 8);
 
-        for ($i = 0; $i <= ExportController::MAX_ROWS; $i++) {
+        foreach (range(1, 4) as $i) {
             Storage::disk('assets')->put(sprintf('img/%04d.jpg', $i), $jpeg);
         }
 
         $this->build();
 
-        $pending = $this->actingAs($this->superUser())->getJson(cp_route('asset-usage.export.thumbnails'))->json('ids');
-        $report = $this->report();
+        $pending = $this->actingAs($this->superUser())->getJson(cp_route('asset-usage.export.thumbnails'))->json();
+        $first = $this->report();
+        $second = $this->report(['part' => 1]);
 
-        $this->assertCount(ExportController::MAX_ROWS, $pending);
-        $this->assertCount(ExportController::MAX_ROWS, $report->rows);
-        $this->assertSame(ExportController::MAX_ROWS + 1, $report->total);
-        $this->assertTrue($report->truncated());
+        $this->assertCount(3, $pending['ids']);
+        $this->assertSame(2, $pending['parts']);
+
+        $this->assertSame(['img/0001.jpg', 'img/0002.jpg'], array_column($first->rows, 'path'));
+        $this->assertFalse($first->continued);
+        $this->assertSame(4, $first->total);
+        $this->assertSame(3, $first->listed);
+        $this->assertTrue($first->truncated());
+
+        $this->assertSame(['img/0003.jpg'], array_column($second->rows, 'path'));
+        $this->assertTrue($second->continued);
+    }
+
+    #[Test]
+    public function a_part_past_the_limit_is_refused()
+    {
+        $this->smallLimits();
+        $this->makeContainer('assets', ['img/one.jpg']);
+        $this->build();
+
+        $this->actingAs($this->superUser())
+            ->getJson(cp_route('asset-usage.export.download', ['part' => 2]))
+            ->assertUnprocessable();
+    }
+
+    #[Test]
+    public function a_later_part_goes_on_with_the_table_without_the_header()
+    {
+        $html = view('asset-usage::export', ['report' => $this->viewReport(continued: true), 'logo' => 'data:image/jpeg;base64,'])->render();
+
+        $this->assertStringContainsString('img/one.jpg', $html);
+        $this->assertStringNotContainsString('<h1>', $html);
+        $this->assertStringNotContainsString('keyagency.nl', $html);
+    }
+
+    private function viewReport(bool $continued = false): Report
+    {
+        return new Report(
+            title: 'Asset Usage',
+            subtitle: 'Overview',
+            createdAt: 'October 8, 2026 2:00 PM',
+            filters: [],
+            sort: 'Name, ascending',
+            total: 1,
+            totalSize: '1 KB',
+            rows: [[
+                'path' => 'img/one.jpg', 'extension' => 'jpg', 'container' => 'Assets', 'edit_url' => 'https://example.com/cp/assets/1',
+                'thumbnail' => null, 'size' => '1 KB', 'dimensions' => null, 'dpi' => null, 'saving' => null, 'saving_marked' => false,
+                'last_modified' => 'Oct 8, 2026', 'usage' => 'Unused', 'unused' => true,
+            ]],
+            showsContainer: false,
+            showsSavings: false,
+            emptyText: 'No assets match these filters.',
+            overviewUrl: 'https://example.com/cp/asset-usage/overview',
+            filename: 'asset-usage-overview-2026-10-08.pdf',
+            listed: 1,
+            continued: $continued,
+        );
     }
 
     #[Test]
@@ -411,6 +478,7 @@ class PdfExportTest extends TestCase
             emptyText: 'No assets match these filters.',
             overviewUrl: 'https://example.com/cp/asset-usage/overview?search=%3Cscript%3E',
             filename: 'asset-usage-overview-2026-10-08.pdf',
+            listed: 1,
         )])->render();
 
         $this->assertStringContainsString('img/&lt;b&gt;bold&lt;/b&gt;.jpg', $html);

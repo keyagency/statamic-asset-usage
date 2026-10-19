@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.7.0 (2026-10-19)
+
+### What's improved
+- A PDF lists up to 10,000 assets instead of 1,000. It is made in parts of 500 that the browser joins into one file, so no single request runs long.
+- The thumbnails in a PDF take about 40% less space.
+
+### What's fixed
+- The filters on the Overview and the Compression page are as wide as their longest option, so no option is cut off.
+
 ## 1.6.0 (2026-10-19)
 
 ### What's new
