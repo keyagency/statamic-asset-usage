@@ -1,11 +1,6 @@
 <script>
 import comparisonFrame from '../support/comparisonFrame.js'
 
-/**
- * Before and after next to each other, as the alternative to the slider.
- * Both sides are drawn at the same scale, the size of the result, and when
- * zoomed in they scroll together so they keep showing the same spot.
- */
 export default {
     mixins: [comparisonFrame],
 
@@ -13,7 +8,6 @@ export default {
         return {
             /** The panel being scrolled to match the other, whose own scroll event is an echo. */
             mirroring: null,
-            /** Per panel, for an image that didn't load. */
             failed: {},
         }
     },

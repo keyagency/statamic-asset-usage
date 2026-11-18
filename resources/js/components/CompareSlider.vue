@@ -2,7 +2,6 @@
 import comparisonFrame from '../support/comparisonFrame.js'
 import { formattingLocale } from '../support/formatting.js'
 
-/** Where each key puts the line, from where it is now. */
 const KEYS = {
     ArrowLeft: position => position - 5,
     ArrowDown: position => position - 5,
@@ -14,11 +13,6 @@ const KEYS = {
     End: () => 100,
 }
 
-/**
- * Before and after on top of each other, with a line that reveals one or the
- * other. Both layers are drawn at the size of the result, so at 100% one
- * screen pixel is one pixel of the compressed file.
- */
 export default {
     mixins: [comparisonFrame],
 
@@ -118,7 +112,6 @@ export default {
             v-text="afterLabel"
         />
 
-        <!-- margin:auto centres the image when it fits, and still scrolls from the top left when it doesn't. -->
         <div
             ref="stage"
             class="absolute inset-0 grid place-items-start overflow-auto px-4 pt-13 pb-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500"
@@ -167,7 +160,6 @@ export default {
                     class="pointer-events-none absolute inset-y-0 -ms-px w-0.5 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
                     :style="{ left: `${position}%` }"
                 >
-                    <!-- The one part that drags on a touch screen, so it doesn't let touches pan. -->
                     <span
                         data-handle
                         class="pointer-events-auto absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 touch-none rounded-full bg-white px-3 py-2 text-[11px] whitespace-nowrap text-gray-900 shadow"

@@ -4,10 +4,6 @@ import { formatNumber } from '../support/formatting.js'
 import RunFailure from './RunFailure.vue'
 import RunProgress from './RunProgress.vue'
 
-/**
- * What the overview says about the usage data: being checked, a check that
- * didn't finish, not to be believed, or due for a rebuild.
- */
 export default {
     components: { Alert, RunFailure, RunProgress },
 
@@ -16,7 +12,6 @@ export default {
     },
 
     computed: {
-        /** The first check has no earlier count to estimate from, so it only counts. */
         progressText() {
             const { done, total } = this.index.progress
 
@@ -25,10 +20,6 @@ export default {
                 : __n('asset-usage::messages.index.progress_count', done, { count: formatNumber(done) })
         },
 
-        /**
-         * What an overdue rebuild is worth saying depends on whether anything
-         * has been keeping the index current in the meantime.
-         */
         agedInstructions() {
             const key = this.index.auto_update ? 'aged_instructions' : 'aged_instructions_manual'
 
@@ -59,7 +50,6 @@ export default {
         :text="index.built_at ? __('asset-usage::messages.index.stale_instructions') : __('asset-usage::messages.index.not_ready_overview')"
     />
 
-    <!-- Deliberately not a warning: the data is usable, a rebuild is just overdue. -->
     <Alert
         v-else-if="index.aged"
         class="mb-4"

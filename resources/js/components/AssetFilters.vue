@@ -9,12 +9,10 @@ import FitSelect from './FitSelect.vue'
  */
 export const ANY_SITE = '*'
 
-/** The search field and the filters above the list, each with a v-model of its own. */
 export default {
     components: { FitSelect, Input },
 
     props: {
-        /** 'usage' or 'compression', which decides the filters on offer. */
         view: String,
         containers: Array,
         sites: Array,

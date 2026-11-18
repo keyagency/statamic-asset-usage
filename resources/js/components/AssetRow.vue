@@ -3,31 +3,22 @@ import { Badge, Button } from '@statamic/cms/ui'
 import RowCheckbox from './RowCheckbox.vue'
 import UsageList from './UsageList.vue'
 
-/**
- * One asset in the overview, plus the row with where it is used once it is
- * expanded. Which columns there are is up to the page, which passes it in.
- */
 export default {
     components: { Badge, Button, RowCheckbox, UsageList },
 
     props: {
         asset: Object,
-        /** The list has a checkbox column. */
         selects: Boolean,
-        /** This asset gets a checkbox in it. */
         selectable: Boolean,
         selected: Boolean,
         expanded: Boolean,
-        /** The list has a column with a delete button. */
         deletes: Boolean,
         showsSavings: Boolean,
         canCompress: Boolean,
-        /** The before and after page, which takes the asset as a query parameter. */
         compressUrl: String,
         threshold: Number,
         indexStale: Boolean,
         showsContainer: Boolean,
-        /** The sortable columns, which the details row spans. */
         columnCount: Number,
         siteTitles: Object,
         multisite: Boolean,
@@ -54,10 +45,8 @@ export default {
 </script>
 
 <template>
-    <!-- An expanded row hands its bottom border to the details row, so the two read as one. -->
     <tr class="border-gray-200 last:border-b-0 dark:border-gray-700" :class="{ 'border-b': !expanded }">
         <td v-if="selects" class="py-2.5 ps-4">
-            <!-- No checkbox at all when the asset can't be deleted or compressed; a disabled one only invites clicking. -->
             <div class="flex items-center">
                 <RowCheckbox
                     v-if="selectable"
@@ -101,7 +90,6 @@ export default {
                     :text="__('asset-usage::messages.compress.button', { percent: Math.round(compression.savings) })"
                 />
                 <Badge v-else-if="compression.compressible" color="green" :text="savingsLabel(compression.savings)" />
-                <!-- Links to the before and after page, which is where the original can be put back. -->
                 <Badge
                     v-else-if="compression.status === 'compressed'"
                     color="green"
@@ -111,7 +99,6 @@ export default {
                         ? `${__('asset-usage::messages.compress.compressed_badge')} (${savingsLabel(compression.savings)})`
                         : __('asset-usage::messages.compress.compressed_badge')"
                 />
-                <!-- Below the threshold, but still a saving. -->
                 <span
                     v-else-if="compression.status === 'ok' && Math.round(compression.savings) >= 1"
                     class="text-gray-500 dark:text-gray-400"
@@ -183,7 +170,6 @@ export default {
 
     <tr v-if="expanded" class="border-b border-gray-200 last:border-b-0 dark:border-gray-700">
         <td v-if="selects" />
-        <!-- Indented past the thumbnail, so the list lines up with the file name. -->
         <td :colspan="columnCount + (deletes ? 1 : 0)" class="pe-4 pb-3 ps-17">
             <UsageList :usages="asset.usages" :site-titles="siteTitles" :multisite="multisite" />
         </td>

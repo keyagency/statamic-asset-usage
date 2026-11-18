@@ -1,7 +1,6 @@
 <script>
 import { Text } from '@statamic/cms/ui'
 
-/** What the overview can't see, the disclaimer, and who made the addon. */
 export default {
     components: { Text },
 }

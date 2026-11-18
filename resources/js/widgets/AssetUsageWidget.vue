@@ -3,16 +3,11 @@ import { Button, Widget } from '@statamic/cms/ui'
 import { Link } from '@statamic/cms/inertia'
 import { formatBytes, formatDate, formattingLocale } from '../support/formatting.js'
 
-/** Green for what is or can be saved, amber for what asks for attention, the same colours the lists use. */
 const TONES = {
     green: 'text-green-700 dark:text-green-400',
     amber: 'text-amber-700 dark:text-amber-400',
 }
 
-/**
- * The dashboard widget. It renders right away and fetches its numbers
- * afterwards, because counting them lists every asset on the site.
- */
 export default {
     components: { Button, Widget, Link },
 
@@ -94,7 +89,6 @@ export default {
             }
         },
 
-        /** Left out until something has been compressed or deleted. */
         logTile() {
             const { compression, deletions } = this.summary.log
 
@@ -162,11 +156,6 @@ export default {
         </div>
 
         <template v-else>
-            <!--
-                Rows with the number in front while the widget is narrow, columns once there is room.
-                Each property has one class per state: Statamic's own utilities outrank an addon's, so
-                a variant can't override a base class core also ships, such as `flex` or `text-lg`.
-            -->
             <div class="grid gap-1 px-2 pt-2 @xl/widget:auto-cols-fr @xl/widget:grid-flow-col">
                 <component
                     :is="tile.url ? 'Link' : 'div'"
@@ -202,9 +191,7 @@ export default {
                 </component>
             </div>
 
-            <!-- The credit sits on the right while it fits on the line, and wraps to the left when it doesn't. -->
             <div class="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                <!-- The time stays in the text, so it doesn't depend on a tooltip; amber once a rebuild is overdue. -->
                 <p
                     v-if="summary.index.built_at"
                     :class="{ 'text-amber-700 dark:text-amber-400': summary.index.aged }"

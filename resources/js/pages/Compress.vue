@@ -5,7 +5,6 @@ import CompareSideBySide from '../components/CompareSideBySide.vue'
 import CompareSlider from '../components/CompareSlider.vue'
 import { escapeHtml, formatDate, mark, parts } from '../support/formatting.js'
 
-/** Behind transparent PNGs, so black logos stay visible. */
 const BACKGROUNDS = {
     light: '#f4f4f4',
     dark: '#1e1e1e',
@@ -39,7 +38,6 @@ export default {
             confirming: false,
             confirmingRestore: false,
             working: false,
-            /** The analysis of the preview, null until the POST below has made it. */
             record: null,
             sizes: null,
             previewFailed: false,
@@ -85,7 +83,6 @@ export default {
             ]
         },
 
-        /** The numbers for each side, under the slider. */
         sides() {
             return [
                 {
@@ -126,7 +123,6 @@ export default {
             return __('asset-usage::messages.compress.cannot_compress', { reason: this.record.reason ?? '' })
         },
 
-        /** The settings the preview was made with, marked so they stand out. */
         previewParts() {
             return parts(__('asset-usage::messages.compress.preview_info', {
                 max: mark(this.settings.max_dimension),
@@ -136,12 +132,10 @@ export default {
             }))
         },
 
-        /** Only for a PNG on a server without pngquant, where installing it would help. */
         showsPngquantLink() {
             return this.asset.extension === 'png' && !this.settings.pngquant
         },
 
-        /** The date a backup made today would be kept until, marked to stand out. */
         keepParts() {
             if (this.keepOriginalsDays === null || this.keepOriginalsDays === undefined) {
                 return parts(__('asset-usage::messages.compress.keep_forever'))
@@ -152,7 +146,6 @@ export default {
             return parts(__('asset-usage::messages.compress.keep_info', { date: mark(this.formatDate(date.toISOString())) }))
         },
 
-        /** What the earlier compression saved, against the kept original. */
         compressedInfo() {
             const compressed = this.backup.compressed
 
@@ -215,7 +208,6 @@ export default {
     <div>
         <Head :title="__('asset-usage::messages.compress.title')" />
 
-        <!-- The action sits where Statamic puts its own, next to the title, rather than below the comparison. -->
         <Header :title="__('asset-usage::messages.compress.title')" :icon="icon">
             <Button :href="backUrl" icon="arrow-left" :text="__('asset-usage::messages.compress.back')" />
             <Button
@@ -389,7 +381,6 @@ export default {
                     </p>
                     <Text as="p" size="sm" variant="subtle" :text="restoreInfo" />
                 </div>
-                <!-- Primary, unless Compress already is: one primary action per page. -->
                 <Button
                     class="shrink-0"
                     :variant="canCompress ? 'default' : 'primary'"

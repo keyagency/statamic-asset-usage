@@ -1,12 +1,10 @@
 <script>
 import { Alert, Description, Heading } from '@statamic/cms/ui'
 
-/** The image driver can't be built on this server, so nothing can be analysed or compressed. */
 export default {
     components: { Alert, Description, Heading },
 
     props: {
-        /** The requirements from the compression status: the driver and where to read about installing it. */
         requirements: Object,
     },
 }

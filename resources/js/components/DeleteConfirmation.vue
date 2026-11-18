@@ -1,15 +1,10 @@
 <script>
 import { ConfirmationModal } from '@statamic/cms/ui'
 
-/**
- * The warning before deleting: for a list of assets, or for every unused
- * asset the filters cover, which has no list to show and says so instead.
- */
 export default {
     components: { ConfirmationModal },
 
     props: {
-        /** The assets about to go, or null. */
         assets: { type: Array, default: null },
         allUnused: Boolean,
         unusedTotal: Number,
@@ -23,7 +18,6 @@ export default {
             return this.assets !== null || this.allUnused
         },
 
-        /** One asset or many changes the wording, so both read naturally. */
         count() {
             return this.allUnused ? this.unusedTotal : (this.assets?.length ?? 0)
         },

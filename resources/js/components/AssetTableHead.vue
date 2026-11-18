@@ -2,7 +2,6 @@
 import { Button } from '@statamic/cms/ui'
 import RowCheckbox from './RowCheckbox.vue'
 
-/** The list's column headings, each sorting the list, and the checkbox that selects every row it can. */
 export default {
     components: { Button, RowCheckbox },
 
@@ -10,9 +9,7 @@ export default {
         columns: Array,
         sortColumn: String,
         sortDirection: String,
-        /** Whether the list has a checkbox column at all. */
         selects: Boolean,
-        /** Whether any row on the page can be selected. */
         selectable: Boolean,
         allSelected: Boolean,
         someSelected: Boolean,
@@ -42,7 +39,6 @@ export default {
     <thead>
         <tr class="border-b border-gray-200 text-start dark:border-gray-700">
             <th v-if="selects" scope="col" class="w-px py-2.5 ps-4">
-                <!-- A block-level flex box, because an inline checkbox sits on the text baseline instead of the middle. -->
                 <div class="flex items-center">
                     <RowCheckbox
                         v-if="selectable"

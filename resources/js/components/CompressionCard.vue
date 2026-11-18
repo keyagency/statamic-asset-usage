@@ -5,22 +5,16 @@ import CompressionTotals from './CompressionTotals.vue'
 import MarkedText from './MarkedText.vue'
 import RunProgress from './RunProgress.vue'
 
-/**
- * The top of the Compression page: what the analysis found, what the addon
- * saved so far, when the numbers are made, and what this server lacks.
- */
 export default {
     components: { Button, Card, CompressionTotals, Heading, Icon, MarkedText, RunProgress },
 
     props: {
         compression: Object,
-        /** The same headline as the notice on the overview, so the page passes it in. */
         headline: Array,
         logUrl: String,
     },
 
     computed: {
-        /** Known once the images are listed, a moment after the run starts. */
         progress() {
             return this.compression.analyzing && this.compression.progress?.total ? this.compression.progress : null
         },
@@ -39,7 +33,6 @@ export default {
             return ''
         },
 
-        /** Names the button by its own label, so the two can't drift apart. */
         whenInfo() {
             return __('asset-usage::messages.compress.when_info', { button: __('asset-usage::messages.compress.analyze') })
         },
@@ -52,10 +45,6 @@ export default {
             ]
         },
 
-        /**
-         * Things this server lacks, each with where to read about installing
-         * it: formats the driver can't handle, and pngquant.
-         */
         warnings() {
             const requirements = this.compression.requirements
             const warnings = []
@@ -91,14 +80,13 @@ export default {
             <div
                 class="flex size-10 shrink-0 items-center justify-center rounded-lg"
                 :class="compression.compressible && !compression.analyzing
-                    ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+                    ? 'text-green-700 not-dark:bg-green-100 dark:bg-green-950 dark:text-green-400'
                     : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'"
             >
                 <Icon :name="compression.analyzing ? 'time-clock' : 'assets'" class="size-5" />
             </div>
 
             <div class="min-w-0">
-                <!-- One element: Heading lays out its children as flex items with a gap between them. -->
                 <Heading size="lg">
                     <MarkedText :parts="headline" marked-class="font-semibold text-green-700 dark:text-green-400" />
                 </Heading>
@@ -108,10 +96,9 @@ export default {
 
         <RunProgress v-if="progress" class="ps-13" :progress="progress" :text="progressText" />
 
-        <!-- What the addon already saved. -->
         <div
             v-if="compression.log.count || compression.log.restored"
-            class="mt-4 flex flex-col gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/60"
+            class="mt-4 flex flex-col gap-2 rounded-lg px-3 py-2.5 text-sm not-dark:bg-gray-50 sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/60"
         >
             <p class="text-gray-700 dark:text-gray-300">
                 <CompressionTotals :totals="compression.log" />
@@ -147,7 +134,6 @@ export default {
             </li>
         </ul>
 
-        <!-- The same actions from the command line, apart from the rest. Indented to line up with the text above. -->
         <div class="mt-4 border-t border-gray-200 pt-4 text-sm dark:border-gray-700">
             <p class="flex gap-2 text-gray-600 dark:text-gray-400">
                 <Icon name="code-block" class="mt-0.5 size-4 shrink-0" />

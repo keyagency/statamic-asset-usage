@@ -1,14 +1,8 @@
 <script>
 import { Card } from '@statamic/cms/ui'
 
-/** Varying widths, so the placeholder does not read as a table. */
 const ROW_WIDTHS = ['w-2/5', 'w-3/5', 'w-1/3', 'w-1/2', 'w-2/3', 'w-1/4']
 
-/**
- * Stands in for the list until the first response lands. Without it the page
- * renders its defaults for a moment, which reads as "not indexed yet" even when
- * the index is fine.
- */
 export default {
     components: { Card },
 

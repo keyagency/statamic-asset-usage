@@ -1,16 +1,9 @@
 <script>
 import { Select } from '@statamic/cms/ui'
 
-/** Room for the clear button, which only shows while something is selected. */
 const CLEAR_BUTTON_REM = 1.75
 
-/**
- * Statamic's Select, always as wide as its longest option, so no option is
- * cut off in it or in its dropdown. The core classes on the Select win from
- * a width given to it (see AGENTS.md), so the wrapper gets the width instead:
- * the longest label, measured where the label is, plus what the trigger needs
- * around a label (its padding and chevron).
- */
+/** Core classes on the Select win from a width given to it (see AGENTS.md), so the wrapper gets the width instead. */
 export default {
     components: { Select },
 
@@ -30,7 +23,6 @@ export default {
     },
 
     computed: {
-        /** The class and style size the wrapper; everything else goes to the select. */
         selectAttrs() {
             const { class: _, style: __, ...attrs } = this.$attrs
 
@@ -79,13 +71,11 @@ export default {
 
             if (!label || !trigger.offsetWidth) return
 
-            // The part of the trigger the label is in takes what the padding and the chevron leave.
             const room = [...trigger.children].find(child => child.contains(label)) ?? label.parentElement
             const clear = trigger.querySelector('[data-ui-combobox-clear-button]')
             const around = trigger.getBoundingClientRect().width - room.getBoundingClientRect().width - (clear?.getBoundingClientRect().width ?? 0)
             const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
 
-            // Measured in the label's own place, so with its font, size and spacing.
             const probe = label.cloneNode(false)
             Object.assign(probe.style, { position: 'absolute', visibility: 'hidden', width: 'max-content', maxWidth: 'none' })
             label.parentElement.appendChild(probe)
@@ -105,11 +95,6 @@ export default {
 </script>
 
 <template>
-    <!--
-        A set width, not a minimum: the select would otherwise grow to whatever it holds.
-        No w-full below it: core ships that class too and would win (see AGENTS.md); the
-        stacked filters stretch it to the full width on small screens anyway.
-    -->
     <div
         class="sm:w-(--fit-width) sm:shrink-0"
         :class="$attrs.class"

@@ -1,11 +1,6 @@
 <script>
 import { Badge } from '@statamic/cms/ui'
 
-/**
- * The places one asset is used, grouped by site. Items that belong to no site
- * (other assets, users, form submissions) are collected under one heading so
- * they don't look like they're missing a site.
- */
 export default {
     components: { Badge },
 
@@ -42,7 +37,6 @@ export default {
             return this.siteTitles[site] ?? site
         },
 
-        /** Never rendered as a heading when there's only one site to speak of. */
         showsSiteHeading(group) {
             return this.multisite && this.groups.length > 1
         },

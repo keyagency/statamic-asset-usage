@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.7.1 (2026-11-18)
+
+### What's fixed
+- The deletion and compression totals, the active tab, the progress bars and the green icons follow dark mode. (Thanks @AlexJFox)
+- The tabs above the Overview, the Compression page and the Log no longer show a vertical scrollbar.
+
 ## 1.7.0 (2026-10-19)
 
 ### What's improved

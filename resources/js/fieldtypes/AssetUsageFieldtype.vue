@@ -4,14 +4,7 @@ import { Badge, Button, Heading, Text } from '@statamic/cms/ui'
 import UsageList from '../components/UsageList.vue'
 import { formatDate, mark, parts } from '../support/formatting.js'
 
-/**
- * The "Used in" panel in the asset editor. Everything it shows comes from field
- * meta, resolved server-side in Fieldtypes\AssetUsage::preload(), so there is no
- * value to edit here, so the field never emits an update.
- *
- * The list sits behind a toggle: an asset used in dozens of places would
- * otherwise push the rest of the form off the screen.
- */
+/** Everything comes from field meta (Fieldtypes\AssetUsage::preload()), so there is no value and the field never emits an update. */
 export default {
     mixins: [FieldtypeMixin],
 
@@ -24,7 +17,6 @@ export default {
     },
 
     computed: {
-        /** Config can switch the panel off while keeping the browser column. */
         visible() {
             return this.config.panel !== false
         },
@@ -41,12 +33,10 @@ export default {
             return __n('asset-usage::messages.used_count', this.count, { count: this.count })
         },
 
-        /** Set server-side for every image this user may compress, null otherwise. */
         compression() {
             return this.meta.compression ?? null
         },
 
-        /** Only a saving gets the default colour; every other outcome is a side note. */
         compressionText() {
             const compression = this.compression
 
@@ -82,7 +72,6 @@ export default {
             }
         },
 
-        /** The before and after page analyses an image that wasn't yet, and can still compress one below the threshold. */
         compressionButton() {
             switch (this.compression.state) {
                 case 'compressible':
@@ -96,7 +85,6 @@ export default {
             }
         },
 
-        /** For an image compressed before: what that saved, against the kept original. */
         compressedText() {
             const compressed = this.compression.compressed
 

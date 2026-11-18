@@ -63,7 +63,6 @@ export default {
     mixins: [polling, runs],
 
     props: {
-        /** 'usage', or 'compression' for the same overview narrowed down to compressible images. */
         view: { type: String, default: 'usage' },
         usageUrl: String,
         compressionPageUrl: String,
@@ -94,7 +93,6 @@ export default {
     },
 
     data() {
-        // A shared link opens with its filters set; see support/filterQuery.js.
         const state = readQuery(this.urlDefaults(), {
             usage: this.view === 'usage',
             compression: this.view === 'compression',
@@ -111,7 +109,6 @@ export default {
             sortColumn: state.sort,
             sortDirection: state.order,
             page: state.page,
-            /** False until the first response lands, so nothing flashes an empty or stale state. */
             ready: false,
             loading: true,
             deleting: false,
@@ -122,20 +119,16 @@ export default {
             searchTimeout: null,
             /** Numbers each load(), so a slow earlier response can't overwrite a newer one. */
             latestLoad: 0,
-            /** Where the compression analysis stands; null while compression is off. */
             compression: null,
-            /** A "Compress all" run is going, which holds back the other buttons. */
             compressing: false,
         }
     },
 
     computed: {
-        /** Deleting belongs to the usage overview; the compression view leaves it out. */
         deletes() {
             return this.canDelete && this.view === 'usage'
         },
 
-        /** Every column can be sorted, both ways, by clicking its heading. */
         columns() {
             return [
                 { field: 'path', label: __('asset-usage::messages.columns.name') },
@@ -156,7 +149,6 @@ export default {
                 sort: this.sortColumn,
                 order: this.sortDirection,
                 page: this.page,
-                // Only the compression page narrows the list down by compression.
                 compression: this.view === 'compression' ? this.filters.compression : undefined,
             }
         },
@@ -165,17 +157,14 @@ export default {
             return this.sites.reduce((titles, site) => ({ ...titles, [site.handle]: site.title }), {})
         },
 
-        /** The compression view selects images to compress, the same way the overview selects assets to delete. */
         compresses() {
             return this.canCompress && this.view === 'compression'
         },
 
-        /** Whether the list has a checkbox column at all. */
         selects() {
             return this.deletes || this.compresses
         },
 
-        /** Rows that may actually be deleted or compressed, which is what the header checkbox toggles. */
         selectableAssets() {
             return this.assets.filter(asset => this.isSelectable(asset))
         },
@@ -192,17 +181,12 @@ export default {
             return this.assets.filter(asset => this.isSelected(asset.id))
         },
 
-        /**
-         * The button stays visible while nothing is selected, so it only carries
-         * a count once there is one, because "(0)" reads as a broken counter.
-         */
         deleteSelectedText() {
             const label = __('asset-usage::messages.delete.selected')
 
             return this.selected.length ? `${label} (${this.selected.length})` : label
         },
 
-        /** Hidden when the image driver is missing: every cell would be empty. */
         showsSavings() {
             return this.compressionEnabled && this.compression?.available !== false
         },
@@ -213,7 +197,6 @@ export default {
             return formatDate(this.compression.analyzed_at, { preset: 'datetime', month: 'long' })
         },
 
-        /** The headline of the analysis card, with the numbers marked to stand out. */
         compressionHeadline() {
             const compression = this.compression
 
@@ -227,15 +210,10 @@ export default {
             }))
         },
 
-        /**
-         * Formatted like Statamic's own CP dates: in the browser's timezone and
-         * the user's formatting locale.
-         */
         builtAt() {
             return formatDate(this.index.built_at, { preset: 'datetime', month: 'long' })
         },
 
-        /** The usage check on the overview, an analysis on the Compression page. */
         showsList() {
             if (this.view === 'compression') return !!this.compression?.available && !this.compression.never_analyzed
 
@@ -264,7 +242,6 @@ export default {
             }
         },
 
-        /** On the overview a PDF needs usage data that can be believed, which the server checks as well. */
         downloadProps() {
             return {
                 params: { ...this.requestParams, view: this.view },
@@ -297,7 +274,6 @@ export default {
     },
 
     methods: {
-        /** How the page starts out, which is what the URL leaves out. */
         urlDefaults() {
             return {
                 search: '',
@@ -333,7 +309,6 @@ export default {
                     this.meta = response.data.meta
                     this.setRun('index', response.data.meta.index)
                     this.setRun('compression', response.data.meta.compression)
-                    // A reload after a rebuild, an analysis or a compression keeps what is still on the page and selectable.
                     this.selected = this.selected.filter(id => this.selectableAssets.some(asset => asset.id === id))
                 })
                 .catch(error => {
@@ -386,7 +361,6 @@ export default {
             this.send(this.$axios.delete(this.destroyUrl, { data: { ids: this.confirming.map(asset => asset.id) } }))
         },
 
-        /** Both delete endpoints answer the same way: a count, per-asset errors and a message. */
         send(request) {
             this.deleting = true
 
@@ -437,10 +411,6 @@ export default {
             return this.expanded.includes(id)
         },
 
-        /**
-         * Same behaviour as Statamic's own listings: a second click flips the
-         * direction, and a new column starts ascending, dates descending.
-         */
         sortBy(field) {
             if (this.sortColumn === field) {
                 this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'
@@ -486,7 +456,6 @@ export default {
                 />
             </template>
 
-            <!-- The same place as on the overview: when it last ran, and the button that runs it. -->
             <template v-else-if="compression?.available">
                 <Text
                     v-if="compressionAnalyzedAt"
@@ -528,11 +497,6 @@ export default {
 
             <IndexAlerts v-else-if="view === 'usage'" :index="index" />
 
-            <!--
-                Everything about compression lives on its own page. The overview only keeps the
-                Saving column and points there when there is something to gain. Centred on wider
-                screens, where the button makes the row taller than the icon.
-            -->
             <Alert
                 v-if="view === 'usage' && compressionPageUrl && compression?.available && compression.compressible && !compression.analyzing"
                 class="mb-4 sm:items-center!"
@@ -572,7 +536,6 @@ export default {
                 <CompressionCard class="mb-4" :compression="compression" :headline="compressionHeadline" :log-url="logUrl" />
             </template>
 
-            <!-- Before the first check or analysis there is nothing to list yet, only the notice and the button above. -->
             <template v-if="showsList">
                 <AssetFilters
                     v-model:search="filters.search"
@@ -588,7 +551,6 @@ export default {
 
                 <DeletionTotals v-if="view === 'usage' && meta?.deletions?.count" :deletions="meta.deletions" :log-url="logUrl" />
 
-                <!-- Also for users who may not delete, who still get the PDF. -->
                 <div v-if="view === 'usage'" class="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
                         <Button
@@ -637,7 +599,6 @@ export default {
                 />
 
                 <Panel v-else>
-                    <!-- Relative too, so absolutely positioned content such as the sr-only heading is clipped here as well. -->
                     <Card
                         inset
                         class="relative overflow-x-auto overscroll-x-contain"

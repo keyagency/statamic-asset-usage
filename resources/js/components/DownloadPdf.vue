@@ -6,22 +6,11 @@ import { joinPdf } from '../support/joinPdf.js'
 /** Thumbnails per request, the most ExportController::makeThumbnails() takes. */
 const BATCH_SIZE = 5
 
-/**
- * The list as a PDF, with the page's current filters and order. The images
- * without a thumbnail are sent a few at a time first, the way "Compress all"
- * sends its images, so no request has to decode hundreds of originals. The
- * PDF itself comes in parts of a few hundred rows, which the page joins into
- * one file, since dompdf slows down sharply on a long one. The button counts
- * both meanwhile.
- *
- * Fetched rather than linked to: Statamic's Button turns an href into an
- * Inertia link, which can't take a file.
- */
+/** Fetched rather than linked to: Statamic's Button turns an href into an Inertia link, which can't take a file. */
 export default {
     components: { Button },
 
     props: {
-        /** The page's current filters and sort, the same the list is loaded with. */
         params: Object,
         url: String,
         thumbnailsUrl: String,
@@ -31,7 +20,6 @@ export default {
 
     data() {
         return {
-            /** The download in progress, null when none is. */
             run: null,
         }
     },
@@ -53,7 +41,6 @@ export default {
     },
 
     beforeUnmount() {
-        // Leaving the page ends the run after the request in flight, and nothing is saved.
         if (this.run) this.run.stopping = true
     },
 
@@ -66,7 +53,6 @@ export default {
             // Taken back from this.run, which is the reactive version, so the button follows the counts.
             const run = this.run
 
-            // The dates in the PDF are in the viewer's timezone, like the ones on the page.
             const params = { ...this.params, page: undefined, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }
 
             try {
@@ -109,7 +95,6 @@ export default {
             this.run = null
         },
 
-        /** The name the server gives the first part, with the time it was made. */
         filename(response) {
             const disposition = response.headers['content-disposition'] ?? ''
 

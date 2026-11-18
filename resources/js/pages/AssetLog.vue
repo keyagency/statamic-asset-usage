@@ -158,7 +158,6 @@ export default {
                             class="border-b border-gray-200 last:border-b-0 dark:border-gray-700"
                             :class="{ 'opacity-60': entry.restored_at }"
                         >
-                            <!-- No column takes the full width, so on a laptop the date and status wrap instead of pushing the table past the card. -->
                             <td class="min-w-44 px-4 py-2.5 text-gray-600 dark:text-gray-400" v-text="date(entry.at)" />
 
                             <td class="px-4 py-2.5">
@@ -216,7 +215,6 @@ export default {
 
                             <td class="min-w-40 px-4 py-2.5">
                                 <template v-if="entry.type === 'compressed'">
-                                    <!-- Only the command line is worth saying: every other compression happens on the Tools page. -->
                                     <div
                                         v-if="entry.source === 'cli'"
                                         class="text-gray-600 dark:text-gray-400"

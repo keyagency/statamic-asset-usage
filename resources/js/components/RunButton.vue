@@ -1,17 +1,11 @@
 <script>
 import { Button, ConfirmationModal } from '@statamic/cms/ui'
 
-/**
- * The button that starts a long run (the usage check, the compression
- * analysis) and stops it while it runs, after asking first. Red while it
- * runs, so it can't be mistaken for the button that starts it.
- */
 export default {
     components: { Button, ConfirmationModal },
 
     props: {
         running: Boolean,
-        /** Asked to stop and not done yet: a busy run saves what it has first. */
         stopping: Boolean,
         disabled: Boolean,
         text: String,

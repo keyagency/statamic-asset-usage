@@ -5,25 +5,15 @@ import { escapeHtml, formatBytes, formatDate } from '../support/formatting.js'
 /** Images per request: small enough that one request never meets the time limit. */
 const BATCH_SIZE = 3
 
-/** Failures shown one by one afterwards; the rest are counted in one message. */
 const MAX_FAILURE_TOASTS = 3
 
-/**
- * "Compress selected" and "Compress all" on the Compression page: the buttons,
- * the warning before a run starts and the progress while it runs. The images
- * are sent a few at a time rather than in one request, so a long run never
- * meets the time limit, also on the sync queue, and the page can show how far
- * it is.
- */
 export default {
     components: { Button, ConfirmationModal },
 
     props: {
-        /** What "Compress all" would cover, from the overview's meta: count, savable_bytes and icc_lost. */
+        /** count, savable_bytes and icc_lost, from the overview's meta. */
         summary: Object,
-        /** The rows ticked on the current page. */
         selected: { type: Array, default: () => [] },
-        /** The page's current filters, which the list of images follows. */
         params: Object,
         allUrl: String,
         batchUrl: String,
@@ -36,9 +26,7 @@ export default {
     data() {
         return {
             confirming: false,
-            /** What the warning is about: 'all', or 'selected' for the ticked rows. */
             scope: 'all',
-            /** The run in progress, null when none is. */
             run: null,
         }
     },
@@ -48,7 +36,6 @@ export default {
             return this.summary?.count ?? 0
         },
 
-        /** The numbers the warning gives, for the ticked rows or for everything "Compress all" covers. */
         covered() {
             if (this.scope === 'selected') {
                 return {
@@ -75,14 +62,12 @@ export default {
             })
         },
 
-        /** Like "Delete selected": a count only once something is ticked, because "(0)" reads as a broken counter. */
         selectedText() {
             const label = __('asset-usage::messages.compress.selected')
 
             return this.selected.length ? `${label} (${this.selected.length})` : label
         },
 
-        /** The date an original kept today would be kept until, the same as on the before and after page. */
         keepText() {
             if (this.keepOriginalsDays === null || this.keepOriginalsDays === undefined) {
                 return __('asset-usage::messages.compress.all_keep_forever')
@@ -101,7 +86,6 @@ export default {
     },
 
     beforeUnmount() {
-        // Leaving the page ends the run after the batch in flight.
         if (this.run) this.run.stopping = true
     },
 
@@ -111,7 +95,6 @@ export default {
             this.confirming = true
         },
 
-        /** Stopping waits for the batch in flight. */
         async start() {
             // A second confirm while the modal closes would start a second run over the same images.
             if (this.run) return
@@ -120,7 +103,6 @@ export default {
             const selected = this.scope === 'selected' ? this.selected.map(asset => asset.id) : null
 
             this.confirming = false
-            // Starts from the count on the button, so the progress never reads "0 of 0" while the list loads.
             this.run = { total: selected?.length ?? this.count, done: 0, compressed: 0, saved: 0, errors: [], stopping: false, failed: false }
             this.$emit('start')
 
@@ -200,7 +182,7 @@ export default {
                     aria-valuemin="0"
                     :aria-valuemax="run.total"
                 >
-                    <div class="h-full rounded-full bg-green-600 transition-[width] dark:bg-green-500" :style="{ width: `${percent}%` }" />
+                    <div class="h-full rounded-full transition-[width] not-dark:bg-green-600 dark:bg-green-500" :style="{ width: `${percent}%` }" />
                 </div>
             </div>
             <Button
@@ -212,7 +194,6 @@ export default {
             />
         </div>
 
-        <!-- The same row as "Delete selected" and "Delete all unused" on the overview. -->
         <div v-else class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
                 <Button
@@ -223,7 +204,6 @@ export default {
                     @click="confirm('selected')"
                 />
 
-                <!-- What else acts on the list, such as the PDF, which stays when nothing can be compressed. -->
                 <slot />
             </div>
 

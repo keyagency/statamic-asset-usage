@@ -1,10 +1,6 @@
 <script>
 import { formatBytes, formattingLocale } from '../support/formatting.js'
 
-/**
- * One line with what the addon saved, such as "12 images · 70.6 MB → 13.3 MB
- * (−81.1%) · 5 resized". Restored compressions are mentioned but not counted.
- */
 export default {
     props: {
         totals: Object,

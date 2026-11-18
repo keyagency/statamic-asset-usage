@@ -1,10 +1,7 @@
 <script>
 import { Link } from '@statamic/cms/inertia'
 
-/**
- * Switches between the addon's pages: usage, compression and the log. Links
- * rather than Statamic's Tabs, which switch content within one page.
- */
+/** Links rather than Statamic's Tabs, which switch content within one page. */
 export default {
     components: { Link },
 
@@ -16,7 +13,6 @@ export default {
     },
 
     computed: {
-        /** Without a compression URL (compression switched off) that tab is left out. */
         tabs() {
             return [
                 { key: 'usage', url: this.usageUrl, label: __('asset-usage::messages.nav.usage') },
@@ -29,14 +25,14 @@ export default {
 </script>
 
 <template>
-    <nav class="mb-6 flex gap-6 overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+    <nav class="mb-6 flex gap-6 overflow-x-auto shadow-[inset_0_-1px_0_var(--theme-color-gray-200)] forced-colors:border-b dark:shadow-[inset_0_-1px_0_var(--theme-color-gray-700)]">
         <Link
             v-for="tab in tabs"
             :key="tab.key"
             :href="tab.url"
-            class="-mb-px border-b-2 px-0.5 pb-2.5 text-sm font-medium whitespace-nowrap"
+            class="border-b-2 px-0.5 pb-2.5 text-sm font-medium whitespace-nowrap"
             :class="tab.key === current
-                ? 'border-gray-900 text-gray-900 dark:border-white dark:text-white'
+                ? 'text-gray-900 not-dark:border-gray-900 dark:border-white dark:text-white'
                 : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'"
             :aria-current="tab.key === current ? 'page' : null"
             v-text="tab.label"

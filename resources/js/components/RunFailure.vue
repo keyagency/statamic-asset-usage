@@ -1,7 +1,6 @@
 <script>
 import { Alert, Heading } from '@statamic/cms/ui'
 
-/** Why the last run didn't finish, and how to see the error itself. */
 export default {
     components: { Alert, Heading },
 
@@ -9,7 +8,6 @@ export default {
         /** reason ('error', 'not_started' or 'stalled') and the server's message, when there was one. */
         failure: Object,
         heading: String,
-        /** The command that runs the same thing in the terminal, where the error shows. */
         command: String,
     },
 
